@@ -58,6 +58,18 @@
 		name="description"
 		content="Create a quiz, share the code, play live together. Fast, frictionless live quizzes for classrooms, teams, and friends."
 	/>
+	<meta property="og:title" content="Quizmo · Host live quizzes in seconds" />
+	<meta
+		property="og:description"
+		content="Create a quiz, share the code, play live together."
+	/>
+	<meta property="og:type" content="website" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content="Quizmo · Host live quizzes in seconds" />
+	<meta
+		name="twitter:description"
+		content="Create a quiz, share the code, play live together."
+	/>
 </svelte:head>
 
 <main class="bg-background text-foreground min-h-dvh">
