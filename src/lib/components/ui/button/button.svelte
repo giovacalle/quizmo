@@ -2,6 +2,7 @@
 	import type { HTMLAnchorAttributes, HTMLButtonAttributes } from 'svelte/elements';
 	import { tv, type VariantProps } from 'tailwind-variants';
 
+	import { resolve } from '$app/paths';
 	import { cn, type WithElementRef } from '$lib/utils.js';
 
 	export const buttonVariants = tv({
@@ -61,14 +62,37 @@
 		children,
 		...restProps
 	}: ButtonProps = $props();
+
+	const rawHref = $derived(href ?? '');
+	const isExternal = $derived(
+		rawHref.startsWith('http://') ||
+			rawHref.startsWith('https://') ||
+			rawHref.startsWith('//') ||
+			rawHref.startsWith('#') ||
+			rawHref.startsWith('mailto:') ||
+			rawHref.startsWith('tel:')
+	);
+	// Svelte-kit's typed `resolve()` accepts a narrow RouteId/Pathname union; the
+	// Button component takes any user-supplied href (external URL, route id,
+	// plain pathname, mailto/tel/hash), so we widen here and let external URLs
+	// bypass resolve() altogether.
+	const resolvedHref = $derived(
+		rawHref === ''
+			? undefined
+			: isExternal
+				? rawHref
+				: // eslint-disable-next-line @typescript-eslint/no-explicit-any
+					resolve(rawHref as any)
+	);
 </script>
 
 {#if href}
+	<!-- eslint-disable svelte/no-navigation-without-resolve -- resolve() is applied inside `resolvedHref` above; the rule can't see through the $derived indirection. -->
 	<a
 		bind:this={ref}
 		data-slot="button"
 		class={cn(buttonVariants({ variant, size }), className)}
-		href={disabled ? undefined : href}
+		href={disabled ? undefined : resolvedHref}
 		aria-disabled={disabled}
 		role={disabled ? 'link' : undefined}
 		tabindex={disabled ? -1 : undefined}

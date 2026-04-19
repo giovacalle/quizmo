@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 
 	const messageByStatus: Record<number, { title: string; body: string }> = {
@@ -34,7 +35,7 @@
 			{serverMessage || preset.body}
 		</p>
 		<a
-			href="/"
+			href={resolve('/')}
 			class="text-primary mt-6 inline-flex text-sm font-medium underline-offset-4 hover:underline"
 		>
 			Back to home
