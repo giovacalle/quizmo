@@ -15,9 +15,10 @@
 	},
 	"vars": {
 		// Public (non-secret) env. Secrets use `wrangler secret put <NAME>`.
-		"TURNSTILE_SITE_KEY": "",
-		"APP_URL": "http://localhost:5173",
-		"RESEND_FROM_EMAIL": ""
+		// For local dev, override APP_URL via `.dev.vars` (gitignored).
+		"TURNSTILE_SITE_KEY": "0x4AAAAAAC_05klBZOR7M7Ts",
+		"APP_URL": "https://quizmo.giova.dev",
+		"RESEND_FROM_EMAIL": "noreply@emails.giova.dev"
 	},
 	"d1_databases": [
 		{
