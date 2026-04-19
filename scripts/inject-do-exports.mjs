@@ -1,33 +1,30 @@
 #!/usr/bin/env bun
 /**
- * Post-build step: compile `src/lib/server/do/quiz-session.ts` (+ its deps) and
- * append a named `export { QuizSession }` to the adapter-cloudflare generated
- * worker entry. The adapter emits only `export default` — wrangler requires
- * DO classes as named exports alongside it.
+ * Post-build step: compile the Durable Object + cron entry and append
+ * `export { QuizSession }` + `export { scheduled }` to the adapter-cloudflare
+ * generated worker entry. The adapter emits only `export default` — wrangler
+ * requires DO classes as named exports, and Cloudflare Cron Triggers invoke
+ * the `scheduled()` export directly.
+ *
+ * Single-bundle design (since :
+ *   Both entries (QuizSession, scheduledHandler) get compiled in ONE esbuild
+ *   pass via a synthetic virtual entry module that imports + re-exports them.
+ *   This is essential because both modules pull in Drizzle / Valibot / etc; if
+ *   we emitted two separate bundles the second append would redeclare the
+ *   shared symbols at the top level of `_worker.js`, causing
+ *     "The symbol 'drizzle' has already been declared"
+ *   at deploy time. One bundle = single set of symbol declarations.
  *
  * Why the extra hoop (still, as of @sveltejs/adapter-cloudflare 7.2.x):
  *   The adapter's `files/worker.js` template ends in
  *     `export { worker_default as default };`
- *   and offers no hook for named-export extension. The project has no separate
- *   "Worker for DOs" script ( → single-worker deployment), so
- *   we inline the compiled DO bundle into the same `_worker.js`.
- *
- * Design:
- *   1. Use esbuild (transitive dep of the adapter) to bundle the DO entry in
- *      ESM format, externalizing CF runtime-provided specifiers
- *      (`cloudflare:workers`) and any $lib aliases we resolve locally via
- *      plugins. The output is self-contained JS.
- *   2. Strip the bundled module's `export` markers and rename its exported
- *      identifier to a unique name (`__QuizSession_injected`) so the default
- *      adapter output's top-level bindings don't collide.
- *   3. Append the stripped module + a `export { __QuizSession_injected as
- *      QuizSession };` trailer to `_worker.js`, guarded by a sentinel comment
- *      so reruns are idempotent.
+ *   and offers no hook for named-export extension. We inline the compiled
+ *   named exports into the same `_worker.js` so there's still exactly one
+ *   Worker script at deploy.
  *
  * Safety gate:
  *   Refuses to run if `src/lib/server/do/quiz-session.ts` still carries the
- *   original scaffold placeholder marker. (In a later build that marker is removed — the
- *   build must compile real code; there's no "shim" fallback anymore.)
+ *   original scaffold placeholder marker.
  *
  * Run automatically as part of `bun run build` (see package.json).
  */
@@ -40,9 +37,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..');
 const workerPath = resolve(root, '.svelte-kit/cloudflare/_worker.js');
 const doSourcePath = resolve(root, 'src/lib/server/do/quiz-session.ts');
+const cronSourcePath = resolve(root, 'src/lib/server/cron/entry.ts');
 const placeholderMarker = 'DO placeholder — real class pending.';
 const classPresenceMarker = 'class QuizSession';
-const sentinel = '/* __quizmo:injected-do-exports__ */';
+const sentinel = '/* __quizmo:injected-worker-extras__ */';
 
 if (!existsSync(workerPath)) {
 	console.error(`[inject-do-exports] ${workerPath} not found — did the adapter build run?`);
@@ -69,6 +67,13 @@ if (!doSource.includes(classPresenceMarker)) {
 	);
 }
 
+if (!existsSync(cronSourcePath)) {
+	throw new Error(
+		`[inject-do-exports] Expected cron entry at ${cronSourcePath}. ` +
+			'Create `src/lib/server/cron/entry.ts` exporting `scheduledHandler`.'
+	);
+}
+
 /**
  * Resolves SvelteKit-style $lib aliases so esbuild can follow them into
  * src/lib/... without ever touching the generated .svelte-kit runtime.
@@ -78,7 +83,6 @@ const aliasPlugin = {
 	setup(build) {
 		build.onResolve({ filter: /^\$lib\// }, (args) => {
 			const rest = args.path.slice('$lib/'.length);
-			// Try common extensions.
 			for (const ext of ['', '.ts', '.js', '/index.ts', '/index.js']) {
 				const candidate = resolve(root, 'src/lib', `${rest}${ext}`);
 				if (existsSync(candidate)) return { path: candidate };
@@ -88,8 +92,19 @@ const aliasPlugin = {
 	}
 };
 
+/**
+ * Virtual entry that ties both real entry modules into one bundle so esbuild
+ * dedupes their shared dependency graph (Drizzle / Valibot / Neverthrow / etc).
+ */
+const virtualEntryPath = resolve(root, '.svelte-kit/__quizmo-worker-extras-entry.ts');
+const virtualEntrySource =
+	`import { QuizSession } from ${JSON.stringify(doSourcePath)};\n` +
+	`import { scheduledHandler } from ${JSON.stringify(cronSourcePath)};\n` +
+	`export { QuizSession, scheduledHandler };\n`;
+writeFileSync(virtualEntryPath, virtualEntrySource);
+
 const result = await esbuild.build({
-	entryPoints: [doSourcePath],
+	entryPoints: [virtualEntryPath],
 	bundle: true,
 	format: 'esm',
 	platform: 'neutral',
@@ -109,35 +124,40 @@ let bundled = outFile.text;
 
 // ESM imports (e.g. `import { DurableObject } from "cloudflare:workers"`) MUST
 // stay at the top level — they can't live inside an IIFE or function scope.
-// So we leave them as-is. The only collision we actually have to solve is the
-// top-level `QuizSession` identifier, which clashes with the re-export name.
-// Rename the declaration (and its single local `export { QuizSession }`) to
-// an internal unique name, then export that under the public `QuizSession`
-// symbol.
-const internalName = '__quizmoQuizSessionImpl';
-// The TS-compiled class is typically emitted as `var QuizSession = class extends DurableObject { ... };`
-// or `class QuizSession { ... }`. Rename both forms, plus the export list.
+// The only collisions we have to solve are the top-level `QuizSession` and
+// `scheduledHandler` identifiers, which clash with the final re-export names
+// and would also collide if anything else in the generated adapter output uses
+// the same symbol. Rename both + rewrite the bundle's tail `export { ... }`.
+const doInternalName = '__quizmoQuizSessionImpl';
+const cronInternalName = '__quizmoScheduledImpl';
+
 bundled = bundled
-	.replace(/\bvar\s+QuizSession\s*=/, `var ${internalName} =`)
-	.replace(/\bclass\s+QuizSession\b/g, `class ${internalName}`)
+	.replace(/\bvar\s+QuizSession\s*=/, `var ${doInternalName} =`)
+	.replace(/\bclass\s+QuizSession\b/g, `class ${doInternalName}`)
+	.replace(/\basync\s+function\s+scheduledHandler\b/, `async function ${cronInternalName}`)
+	.replace(/\bfunction\s+scheduledHandler\b/, `function ${cronInternalName}`)
 	.replace(/export\s*\{\s*([^}]*?)\s*\};?\s*$/, (_match, names) => {
 		const renamed = names
 			.split(',')
 			.map((s) => s.trim())
 			.filter(Boolean)
-			.map((n) => (n === 'QuizSession' ? internalName : n))
+			.map((n) => {
+				if (n === 'QuizSession') return doInternalName;
+				if (n === 'scheduledHandler') return cronInternalName;
+				return n;
+			})
 			.join(', ');
-		// Keep this as a local statement so the symbols are in scope for the
-		// trailer. We don't re-emit `export { ... }` here because the top-level
-		// named-export happens in the trailer itself.
 		return `/* renamed to internal: ${renamed} */`;
 	});
 
-const trailer = `\n\n${sentinel}\n` + bundled + `\nexport { ${internalName} as QuizSession };\n`;
+const trailer =
+	`\n\n${sentinel}\n` +
+	bundled +
+	`\nexport { ${doInternalName} as QuizSession, ${cronInternalName} as scheduled };\n`;
 
 copyFileSync(workerPath, `${workerPath}.pre-inject.bak`);
 writeFileSync(workerPath, workerSource + trailer);
 
 console.log(
-	`[inject-do-exports] appended compiled QuizSession (${bundled.length} bytes) to ${workerPath}`
+	`[inject-do-exports] appended compiled QuizSession + scheduled (${bundled.length} bytes) to ${workerPath}`
 );
