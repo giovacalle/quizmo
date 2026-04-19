@@ -20,7 +20,9 @@
 	<title>{status} · {preset.title}</title>
 </svelte:head>
 
-<main class="bg-background text-foreground flex min-h-screen items-center justify-center px-6 py-12">
+<main
+	class="bg-background text-foreground flex min-h-screen items-center justify-center px-6 py-12"
+>
 	<section
 		class="bg-card text-foreground border-border w-full max-w-md rounded-lg border p-8 shadow-sm"
 	>

@@ -1,7 +1,7 @@
-import { building } from '$app/environment';
 import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { svelteKitHandler } from 'better-auth/svelte-kit';
 
+import { building } from '$app/environment';
 import { createAuth } from '$lib/server/auth';
 import { isAppError } from '$lib/server/errors';
 

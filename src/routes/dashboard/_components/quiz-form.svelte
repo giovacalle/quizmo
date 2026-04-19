@@ -45,10 +45,7 @@
 			text: '',
 			timeLimitSec: 20,
 			points: 1000,
-			answers: [
-				{ ...blankAnswer(), isCorrect: true },
-				blankAnswer()
-			]
+			answers: [{ ...blankAnswer(), isCorrect: true }, blankAnswer()]
 		};
 	}
 

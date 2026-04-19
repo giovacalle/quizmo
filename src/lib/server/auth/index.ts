@@ -1,6 +1,6 @@
 import { AppError } from '$lib/server/errors';
 
-import { type AuthEnv, type AuthInstance, createAuthConfig } from './config';
+import { createAuthConfig, type AuthEnv, type AuthInstance } from './config';
 
 /**
  * Entry point used by `hooks.server.ts` and route handlers. Reads platform

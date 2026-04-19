@@ -60,11 +60,7 @@ export async function enforceRateLimit(
 	identifier: string
 ): Promise<void> {
 	const keyPrefix =
-		kind === 'send-email'
-			? 'rl:email:send:'
-			: kind === 'send-ip'
-				? 'rl:ip:send:'
-				: 'rl:ip:verify:';
+		kind === 'send-email' ? 'rl:email:send:' : kind === 'send-ip' ? 'rl:ip:send:' : 'rl:ip:verify:';
 	await bumpRateLimit(kv, `${keyPrefix}${identifier}`, LIMITS[kind], MESSAGES[kind]);
 }
 

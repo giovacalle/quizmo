@@ -7,16 +7,16 @@
 	import TrophyIcon from '@lucide/svelte/icons/trophy';
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import XIcon from '@lucide/svelte/icons/x';
-	import { fly } from 'svelte/transition';
 	import { toast } from 'svelte-sonner';
+	import { fly } from 'svelte/transition';
 
+	import Leaderboard from '$lib/components/leaderboard.svelte';
 	import * as Button from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
-	import Leaderboard from '$lib/components/leaderboard.svelte';
 	import { cn } from '$lib/utils';
 
-	import type { PageData } from './$types';
 	import { HostSocket } from './_lib/host-socket.svelte';
+	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
@@ -60,7 +60,8 @@
 
 	const timerColorClass = $derived.by(() => {
 		if (timePct > 0.5) return 'stroke-success';
-		if (timePct > 5 / Math.max(socket.currentQuestion?.timeLimitSec ?? 1, 1)) return 'stroke-warning';
+		if (timePct > 5 / Math.max(socket.currentQuestion?.timeLimitSec ?? 1, 1))
+			return 'stroke-warning';
 		return 'stroke-destructive';
 	});
 
@@ -101,9 +102,7 @@
 	let prevCount = $state(0);
 	$effect(() => {
 		if (socket.participants.length > prevCount) {
-			const fresh = socket.participants
-				.slice(prevCount)
-				.map((p) => p.participantId);
+			const fresh = socket.participants.slice(prevCount).map((p) => p.participantId);
 			joinedIds = [...joinedIds, ...fresh];
 			const t = setTimeout(() => {
 				joinedIds = joinedIds.filter((id) => !fresh.includes(id));
@@ -124,7 +123,9 @@
 		<!-- End-of-quiz podium ---------------------------------------------- -->
 		<div class="mx-auto max-w-3xl space-y-8 py-12 text-center">
 			<div>
-				<div class="bg-primary/10 text-primary mx-auto mb-4 flex size-16 items-center justify-center rounded-2xl">
+				<div
+					class="bg-primary/10 text-primary mx-auto mb-4 flex size-16 items-center justify-center rounded-2xl"
+				>
 					<TrophyIcon class="size-8" />
 				</div>
 				<h1 class="text-foreground text-4xl font-bold tracking-tight">Quiz complete!</h1>
@@ -134,12 +135,7 @@
 			{#if podium.length > 0}
 				<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
 					{#each podium as p, i (p.participantId)}
-						<Card.Root
-							class={cn(
-								'text-center',
-								i === 0 && 'sm:order-2 sm:-translate-y-4'
-							)}
-						>
+						<Card.Root class={cn('text-center', i === 0 && 'sm:order-2 sm:-translate-y-4')}>
 							<Card.Header>
 								<div
 									class="bg-accent text-accent-foreground mx-auto flex size-12 items-center justify-center rounded-full text-xl font-bold"
@@ -168,21 +164,28 @@
 	{:else}
 		<!-- Live session 3-column layout ---------------------------------- -->
 		{#if socket.connectionLost}
-			<div class="bg-destructive/10 text-destructive mb-4 flex items-center justify-between gap-3 rounded-lg border border-destructive/30 px-4 py-3 text-sm" role="alert">
+			<div
+				class="bg-destructive/10 text-destructive border-destructive/30 mb-4 flex items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm"
+				role="alert"
+			>
 				<span>Connection lost. Click retry to reconnect.</span>
 				<Button.Root size="sm" variant="outline" onclick={() => socket.retry()}>Retry</Button.Root>
 			</div>
 		{/if}
 
-		<div class="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)_minmax(0,340px)]">
+		<div
+			class="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)_minmax(0,340px)]"
+		>
 			<!-- LEFT: join code + participants -->
 			<aside class="space-y-4">
 				<Card.Root>
 					<Card.Header class="pb-3">
-						<Card.Description class="uppercase tracking-wider text-xs">Join code</Card.Description>
+						<Card.Description class="text-xs tracking-wider uppercase">Join code</Card.Description>
 					</Card.Header>
 					<Card.Content class="space-y-3">
-						<p class="text-foreground text-center font-mono text-4xl font-bold tracking-[0.3em] tabular-nums sm:text-5xl">
+						<p
+							class="text-foreground text-center font-mono text-4xl font-bold tracking-[0.3em] tabular-nums sm:text-5xl"
+						>
 							{data.joinCode}
 						</p>
 						<Button.Root variant="outline" class="w-full" onclick={copyCode}>
@@ -220,7 +223,9 @@
 										)}
 										in:fly={{ y: -8, duration: 300 }}
 									>
-										<span class="bg-primary/10 text-primary flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
+										<span
+											class="bg-primary/10 text-primary flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
+										>
 											{p.nickname.charAt(0).toUpperCase()}
 										</span>
 										<span class="text-foreground truncate">{p.nickname}</span>
@@ -249,7 +254,7 @@
 				{:else if socket.currentQuestion}
 					<Card.Root class="overflow-hidden">
 						<Card.Header>
-							<Card.Description class="text-xs uppercase tracking-wider">
+							<Card.Description class="text-xs tracking-wider uppercase">
 								Question {socket.currentQuestion.qIdx + 1}
 							</Card.Description>
 							<Card.Title class="text-2xl sm:text-3xl">
@@ -260,11 +265,7 @@
 							<!-- Timer ring -->
 							<div class="flex items-center justify-center">
 								<div class={cn('relative size-24', pulseLast3 && 'animate-pulse')}>
-									<svg
-										viewBox="0 0 100 100"
-										class="size-full -rotate-90"
-										aria-hidden="true"
-									>
+									<svg viewBox="0 0 100 100" class="size-full -rotate-90" aria-hidden="true">
 										<circle
 											cx="50"
 											cy="50"
@@ -296,8 +297,7 @@
 								{#each socket.currentQuestion.answers as ans (ans.idx)}
 									{@const letter = ['A', 'B', 'C', 'D', 'E', 'F'][ans.idx] ?? '?'}
 									{@const isCorrect =
-										socket.status === 'revealing' &&
-										socket.reveal?.correctIdx === ans.idx}
+										socket.status === 'revealing' && socket.reveal?.correctIdx === ans.idx}
 									<div
 										class={cn(
 											'border-border bg-background flex items-center gap-3 rounded-lg border p-3 text-sm',
@@ -333,10 +333,7 @@
 										style:width={`${
 											socket.participants.length === 0
 												? 0
-												: Math.min(
-														100,
-														(answerCountForCurrent / socket.participants.length) * 100
-													)
+												: Math.min(100, (answerCountForCurrent / socket.participants.length) * 100)
 										}%`}
 									></div>
 								</div>

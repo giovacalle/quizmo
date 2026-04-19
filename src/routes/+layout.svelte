@@ -4,6 +4,7 @@
 
 	import favicon from '$lib/assets/favicon.svg';
 	import ModeToggle from '$lib/components/mode-toggle.svelte';
+
 	import '../app.css';
 
 	let { children } = $props();

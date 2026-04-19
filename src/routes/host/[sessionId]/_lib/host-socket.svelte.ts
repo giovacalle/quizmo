@@ -1,3 +1,5 @@
+import { SvelteMap } from 'svelte/reactivity';
+
 import type {
 	AnswerCountUpdatedMessage,
 	EndedMessage,
@@ -57,7 +59,7 @@ export class HostSocket {
 	lastError = $state<string | null>(null);
 
 	/** Track previous positions so the leaderboard can render move indicators. */
-	#prevPositions = new Map<string, number>();
+	#prevPositions: SvelteMap<string, number> = new SvelteMap();
 
 	constructor(sessionId: string) {
 		this.#sessionId = sessionId;
@@ -200,7 +202,11 @@ export class HostSocket {
 		// Seed leaderboard from participants on initial state — DO doesn't send a
 		// separate scoreboard message until the first reveal.
 		this.#updateLeaderboard(msg.payload.participants);
-		if (msg.payload.currentQuestion && msg.payload.questionStartedAtMs && msg.payload.timeLimitSec) {
+		if (
+			msg.payload.currentQuestion &&
+			msg.payload.questionStartedAtMs &&
+			msg.payload.timeLimitSec
+		) {
 			this.currentQuestion = {
 				qIdx: msg.payload.currentQuestion.qIdx,
 				text: msg.payload.currentQuestion.text,
@@ -262,12 +268,12 @@ export class HostSocket {
 
 	#updateLeaderboard(next: ParticipantSummary[]) {
 		const sorted = [...next].sort((a, b) => b.score - a.score);
-		const nextPositions = new Map<string, number>();
+		const nextPositions: SvelteMap<string, number> = new SvelteMap();
 		sorted.forEach((p, i) => nextPositions.set(p.participantId, i + 1));
 		// Save the CURRENT positions as prev BEFORE we overwrite `leaderboard`.
-		this.#prevPositions = new Map(
-			[...this.leaderboard].map((p, i) => [p.participantId, i + 1] as [string, number])
-		);
+		const carry: SvelteMap<string, number> = new SvelteMap();
+		this.leaderboard.forEach((p, i) => carry.set(p.participantId, i + 1));
+		this.#prevPositions = carry;
 		this.leaderboard = sorted;
 		// If first render (no prev), seed prev to current so arrows don't show spuriously.
 		if (this.#prevPositions.size === 0) this.#prevPositions = nextPositions;

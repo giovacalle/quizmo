@@ -1,4 +1,3 @@
-import { getRequestEvent } from '$app/server';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { emailOTP } from 'better-auth/plugins';
@@ -6,6 +5,7 @@ import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { drizzle } from 'drizzle-orm/d1';
 import { Resend } from 'resend';
 
+import { getRequestEvent } from '$app/server';
 import { db } from '$lib/server/db/client';
 import { users as domainUsers } from '$lib/server/db/schema';
 import { AppError } from '$lib/server/errors';

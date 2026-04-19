@@ -33,13 +33,9 @@ export function verifyTurnstile(
 	// fail closed rather than silently let bots through. This surfaces as an inline
 	// AppError so the /login UI shows a clear "Verification failed" message.
 	if (!secret) {
-		return ResultAsync.fromSafePromise(
-			Promise.resolve(undefined as never)
-		).andThen(() =>
+		return ResultAsync.fromSafePromise(Promise.resolve(undefined as never)).andThen(() =>
 			ResultAsync.fromPromise(
-				Promise.reject(
-					new AppError('INVALID_INPUT', 'Verification failed — please try again')
-				),
+				Promise.reject(new AppError('INVALID_INPUT', 'Verification failed — please try again')),
 				(e) => e as AppError
 			)
 		);
@@ -62,8 +58,6 @@ export function verifyTurnstile(
 			return { success: true as const };
 		}),
 		(e) =>
-			e instanceof AppError
-				? e
-				: new AppError('INTERNAL_ERROR', 'Could not verify Turnstile')
+			e instanceof AppError ? e : new AppError('INTERNAL_ERROR', 'Could not verify Turnstile')
 	);
 }

@@ -4,7 +4,7 @@ import * as v from 'valibot';
 import { enforceRateLimit, hashEmail } from '$lib/server/auth/rate-limit';
 import { verifyTurnstile } from '$lib/server/auth/turnstile';
 import { emailSchema, otpCodeSchema } from '$lib/server/db/validators';
-import { type ErrorCode, isAppError } from '$lib/server/errors';
+import { isAppError, type ErrorCode } from '$lib/server/errors';
 
 /**
  * Login route server file. Two actions mirror the two-step UI:

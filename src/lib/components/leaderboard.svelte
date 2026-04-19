@@ -90,11 +90,7 @@
 {#if rows.length === 0}
 	<p class="text-muted-foreground px-4 py-8 text-center text-sm" role="status">No scores yet</p>
 {:else}
-	<ol
-		aria-live="polite"
-		aria-label="Leaderboard"
-		class={cn('space-y-2', className)}
-	>
+	<ol aria-live="polite" aria-label="Leaderboard" class={cn('space-y-2', className)}>
 		{#each rows as row (row.id)}
 			<li
 				animate:flip={frozen ? { duration: 0 } : { duration: 400, easing: quintOut }}

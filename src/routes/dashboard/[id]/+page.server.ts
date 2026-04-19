@@ -93,8 +93,7 @@ export const actions: Actions = {
 			.where(and(eq(quizzes.id, params.id), eq(quizzes.ownerId, user.id)))
 			.get();
 		if (!existing) return fail(404, { message: 'Quiz not found' });
-		if (existing.status === 'archived')
-			return fail(400, { message: 'Unarchive before editing' });
+		if (existing.status === 'archived') return fail(400, { message: 'Unarchive before editing' });
 
 		const form = await request.formData();
 		const raw = form.get('payload');
@@ -195,10 +194,7 @@ export const actions: Actions = {
 		}
 
 		if (!code)
-			return throwAppError(
-				'CONFLICT',
-				'Could not allocate join code — please retry in a moment'
-			);
+			return throwAppError('CONFLICT', 'Could not allocate join code — please retry in a moment');
 
 		// KV cache for O(1) `/join` lookup. D1 remains authoritative; cache miss
 		// falls back to D1 by code.
