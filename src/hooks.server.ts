@@ -1,6 +1,45 @@
-import type { HandleServerError } from '@sveltejs/kit';
+import { building } from '$app/environment';
+import type { Handle, HandleServerError } from '@sveltejs/kit';
+import { svelteKitHandler } from 'better-auth/svelte-kit';
 
+import { createAuth } from '$lib/server/auth';
 import { isAppError } from '$lib/server/errors';
+
+/**
+ * `handle` wires better-auth into every request:
+ *   1. Mount a per-request auth instance on `event.locals.auth` — bindings come
+ *      from `platform.env`, so the instance MUST be fresh per invocation.
+ *   2. Resolve the current session + user via `auth.api.getSession` and expose
+ *      `event.locals.user` to load/action functions + `+layout.server.ts` so the
+ *      authenticated user id is available everywhere without re-parsing cookies.
+ *   3. Hand off to `svelteKitHandler`, which forwards any `/api/auth/*` request
+ *      to better-auth's own router AND attaches any Set-Cookie headers emitted
+ *      by server actions (sign-in, verify-OTP, sign-out) to the outgoing
+ *      Response.
+ *
+ * During `vite build` the module is evaluated without a real `platform`. The
+ * `building` guard short-circuits so static-analysis passes without a binding
+ * crash — runtime always has `event.platform` populated.
+ */
+export const handle: Handle = async ({ event, resolve }) => {
+	if (building || !event.platform) {
+		return resolve(event);
+	}
+
+	const auth = createAuth(event.platform.env);
+	event.locals.auth = auth;
+
+	const session = await auth.api.getSession({ headers: event.request.headers });
+	event.locals.user = session?.user
+		? {
+				id: session.user.id,
+				email: session.user.email,
+				name: session.user.name ?? null
+			}
+		: null;
+
+	return svelteKitHandler({ event, resolve, auth, building });
+};
 
 /**
  * `handleError` runs for unexpected errors during load/endpoint/rendering.

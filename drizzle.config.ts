@@ -17,7 +17,11 @@ import { defineConfig } from 'drizzle-kit';
 export default defineConfig({
 	dialect: 'sqlite',
 	driver: 'd1-http',
-	schema: './src/lib/server/db/schema.ts',
+	// Two schema files live alongside each other:
+	//   - db/schema.ts     — Quizmo domain (users, quizzes, questions, ...) owned by 
+	//   - auth/schema.ts   — better-auth's auth_users table ()
+	// drizzle-kit generate walks both and produces a single migration per change set.
+	schema: ['./src/lib/server/db/schema.ts', './src/lib/server/auth/schema.ts'],
 	out: './drizzle/migrations',
 	dbCredentials: {
 		accountId: process.env.CLOUDFLARE_ACCOUNT_ID ?? '',
