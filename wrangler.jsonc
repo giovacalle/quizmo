@@ -23,7 +23,8 @@
 		{
 			"binding": "QUIZMO_DB",
 			"database_name": "quizmo-db",
-			"database_id": "72366ab6-4269-4546-afe9-64b920ac0aef"
+			"database_id": "72366ab6-4269-4546-afe9-64b920ac0aef",
+			"migrations_dir": "drizzle/migrations"
 		}
 	],
 	"kv_namespaces": [
