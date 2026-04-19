@@ -9,7 +9,10 @@ declare global {
 			cf?: IncomingRequestCfProperties;
 		}
 
-		// interface Error {}
+		interface Error {
+			message: string;
+			code?: import('$lib/server/errors').ErrorCode;
+		}
 		// interface Locals {}
 		// interface PageData {}
 		// interface PageState {}
