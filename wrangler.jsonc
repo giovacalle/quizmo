@@ -9,5 +9,48 @@
 		"directory": ".svelte-kit/cloudflare"
 	},
 	"workers_dev": true,
-	"preview_urls": true
+	"preview_urls": true,
+	"observability": {
+		"enabled": true
+	},
+	"vars": {
+		// Public (non-secret) env. Secrets use `wrangler secret put <NAME>`.
+		"TURNSTILE_SITE_KEY": "",
+		"APP_URL": "http://localhost:5173",
+		"RESEND_FROM_EMAIL": ""
+	},
+	"d1_databases": [
+		{
+			"binding": "QUIZMO_DB",
+			"database_name": "quizmo-db",
+			"database_id": "72366ab6-4269-4546-afe9-64b920ac0aef"
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "QUIZMO_AUTH_KV",
+			"id": "576b38bb5be443ea9a848b9ed8b91c00"
+		},
+		{
+			"binding": "QUIZMO_QUIZ_KV",
+			"id": "82153bfb6ac24f8796e17ac379197174"
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "QUIZMO_SESSION",
+				"class_name": "QuizSession"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": ["QuizSession"]
+		}
+	],
+	"triggers": {
+		"crons": ["0 3 * * *"]
+	}
 }
