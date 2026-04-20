@@ -11,7 +11,7 @@ import {
 } from './validators';
 
 /**
- * Pure-logic coverage for the refinements. These are load-bearing
+ * Pure-logic coverage for the valibot refinements. These are load-bearing
  * for every user-input path (login, join, quiz editor) so drift in any of
  * these asserts is a real bug.
  */
@@ -143,7 +143,9 @@ describe('quizWithQuestionsSchema (count)', () => {
 	const base = { title: 'Test', description: '' };
 
 	it('rejects 2 questions', () => {
-		expect(() => v.parse(quizWithQuestionsSchema, { ...base, questions: validQuestionSet(2) })).toThrow();
+		expect(() =>
+			v.parse(quizWithQuestionsSchema, { ...base, questions: validQuestionSet(2) })
+		).toThrow();
 	});
 
 	it('accepts 3 questions', () => {
@@ -159,6 +161,8 @@ describe('quizWithQuestionsSchema (count)', () => {
 	});
 
 	it('rejects 26 questions', () => {
-		expect(() => v.parse(quizWithQuestionsSchema, { ...base, questions: validQuestionSet(26) })).toThrow();
+		expect(() =>
+			v.parse(quizWithQuestionsSchema, { ...base, questions: validQuestionSet(26) })
+		).toThrow();
 	});
 });

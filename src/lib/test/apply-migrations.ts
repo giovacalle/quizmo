@@ -13,7 +13,6 @@ beforeAll(async () => {
 		// Injected at vitest bootstrap via miniflare.bindings.TEST_MIGRATIONS in
 		// `vite.config.ts`. Not part of the production binding set so not in
 		// `worker-configuration.d.ts` — narrow access through the generic env.
-		(env as unknown as { TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1] })
-			.TEST_MIGRATIONS
+		(env as unknown as { TEST_MIGRATIONS: Parameters<typeof applyD1Migrations>[1] }).TEST_MIGRATIONS
 	);
 });

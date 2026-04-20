@@ -16,9 +16,9 @@
  *     messages) are gated by the role attachment on the socket inside the DO.
  *     For now we trust the `role=host` param because this route also loads
  *     `locals.user` and can enforce `host_id = locals.user.id` as a cheap
- *     belt+suspenders — see below. session-start action mints the host
- *     socket URL server-side so the role query param is not attacker-surface
- *     for the host flow.
+ *     belt+suspenders — see below. The session-start server action mints the
+ *     host socket URL server-side so the role query param is not
+ *     attacker-surface for the host flow.
  */
 import type { RequestHandler } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';

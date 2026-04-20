@@ -1,5 +1,5 @@
 /**
- * Scoring formula for a single correct answer ( → Scoring formula).
+ * Scoring formula for a single correct answer.
  *
  *   scoreDelta = round(basePoints × max(0.5, timeLeft / totalTime))
  *              + (isFirstCorrect ? 10 : 0)

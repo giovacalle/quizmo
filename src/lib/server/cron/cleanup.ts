@@ -10,8 +10,7 @@ import { quizSessions, quizzes } from '$lib/server/db/schema';
  *
  *  1. Archive quizzes whose `last_active_at` is older than 30 days. Archived
  *     quizzes are excluded from both the 3-active and 20-lifetime caps at
- *     s dashboard load, so this is the pressure-release for long-dormant
- *     rows. Honors the archive semantics ().
+ *     dashboard load, so this is the pressure-release for long-dormant rows.
  *
  *  2. Reconcile stuck sessions. A `QuizSession` DO that was live when the
  *     worker got evicted might have missed the final D1 flush. We look for

@@ -3,10 +3,10 @@
  *
  * Wire format: JSON `{type, payload}`. Every message is validated with Valibot on
  * arrival so malformed/attacker payloads never flow into state mutations. The
- * discriminated-union types below double as documentation for the host  and
- * participant  clients that ship in later milestones.
+ * discriminated-union types below double as documentation for the host and
+ * participant clients.
  *
- * Direction matrix ( → WebSocket message protocol):
+ * Direction matrix:
  *   Server → Client: state, participant-joined, participant-left, question-started,
  *                    answer-count-updated, reveal, ended, error
  *   Client → Server: join, submit-answer, reconnect (participant-origin)
@@ -14,7 +14,7 @@
  */
 import * as v from 'valibot';
 
-import { nicknameSchema } from '$lib/server/db/validators';
+import { nicknameSchema } from '$lib/validators';
 
 // ---------------------------------------------------------------------------
 // Inbound (client → DO) — Valibot schemas + inferred TS unions

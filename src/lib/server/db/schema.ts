@@ -81,7 +81,7 @@ export const answers = sqliteTable(
 
 /**
  * Live quiz instance. Named `quiz_sessions` (not `sessions`) to avoid colliding with
- * better-auth's own "session" concept . `code` is the 6-char [A-Z0-9] join code —
+ * better-auth's own "session" concept. `code` is the 6-char [A-Z0-9] join code —
  * D1 is the source of truth, KV `code:{CODE}` is a read-through cache.
  */
 export const quizSessions = sqliteTable('quiz_sessions', {

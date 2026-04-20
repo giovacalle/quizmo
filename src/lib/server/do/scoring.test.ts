@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { computeScore } from './scoring';
 
 /**
- * The 5 canonical cases from the manual sanity check. These pin down the
- * locked scoring formula: linear decay clamped to 0.5× floor, plus a +10 flat
- * bonus for the first-correct participant per question.
+ * The 5 canonical cases. These pin down the locked scoring formula: linear
+ * decay clamped to 0.5× floor, plus a +10 flat bonus for the first-correct
+ * participant per question.
  */
 describe('computeScore', () => {
 	it('instant correct, first', () => {

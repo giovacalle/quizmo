@@ -1,7 +1,7 @@
+import { fileURLToPath } from 'node:url';
 import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-pool-workers';
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
-import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 const libPath = fileURLToPath(new URL('./src/lib', import.meta.url));
@@ -28,10 +28,7 @@ export default defineConfig({
 					name: 'server',
 					environment: 'node',
 					include: ['src/**/*.{test,spec}.{js,ts}'],
-					exclude: [
-						'src/**/*.svelte.{test,spec}.{js,ts}',
-						'src/**/*.workers.{test,spec}.{js,ts}'
-					]
+					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}', 'src/**/*.workers.{test,spec}.{js,ts}']
 				}
 			},
 			{

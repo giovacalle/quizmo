@@ -10,7 +10,7 @@ import { createAuthConfig, type AuthEnv, type AuthInstance } from './config';
  *
  * Missing secrets at runtime produce a user-facing AppError rather than a 500
  * crash so the login page can surface a clean "Verification failed" / "Could
- * not send code" message while the runbook is outstanding.
+ * not send code" message when secrets haven't been configured yet.
  */
 export function createAuth(platformEnv: App.Platform['env']): AuthInstance {
 	const env = readAuthEnv(platformEnv);

@@ -3,10 +3,11 @@ import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 /**
  * Better-auth's required user table. Kept separate from the domain `users` table in
- * `src/lib/server/db/schema.ts` so domain user schema stays untouched. The ID
- * is mirrored into the domain `users` row via a `databaseHooks.user.create.after`
- * callback, so `quizzes.owner_id` and `quiz_sessions.host_id` (which FK to `users`)
- * both keep working with the same id better-auth issues.
+ * `src/lib/server/db/schema.ts` so the domain user schema stays decoupled from
+ * better-auth's required columns. The ID is mirrored into the domain `users` row
+ * via a `databaseHooks.user.create.after` callback, so `quizzes.owner_id` and
+ * `quiz_sessions.host_id` (which FK to `users`) both keep working with the same
+ * id better-auth issues.
  *
  * Sessions, OTP codes, and rate-limit counters live in KV (`QUIZMO_AUTH_KV`) via
  * better-auth's `secondaryStorage`, so this file only declares the one SQL table

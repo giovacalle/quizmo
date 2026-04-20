@@ -75,9 +75,9 @@
 	 * Podium background tint. We keep the badge palette rooted in our semantic
 	 * tokens (no hardcoded hex) — `accent` anchors the visual weight, opacity
 	 * conveys rank so the component still reads correctly in both light + dark
-	 * mode. Documented choice (see ): no `warning-border` gold exists as
-	 * a standalone token, and inventing one just for 3 rows would bloat
-	 * the design system.
+	 * mode. We opted against gold/silver/bronze hardcoded colors: they would
+	 * require three new standalone tokens just to theme three rows, bloating
+	 * the design system for a fleeting visual cue.
 	 */
 	function podiumClasses(position: number): string {
 		if (position === 1) return 'border-accent bg-accent/60 text-accent-foreground';

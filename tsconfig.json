@@ -14,9 +14,6 @@
 		"noUnusedParameters": true,
 		"noUncheckedIndexedAccess": true,
 		"moduleResolution": "bundler",
-		"types": [
-			"./worker-configuration.d.ts",
-			"@cloudflare/vitest-pool-workers/types"
-		]
+		"types": ["./worker-configuration.d.ts", "@cloudflare/vitest-pool-workers/types"]
 	}
 }

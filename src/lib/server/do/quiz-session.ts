@@ -14,7 +14,8 @@
  *      DO eviction mid-quiz doesn't lose progress. End-of-session flips the
  *      quiz_sessions.status row and rewrites final scores idempotently.
  *
- * Storage layout (locked — do NOT re-shape without propagating changes):
+ * Storage layout (shared contract with the host + participant clients — do NOT
+ * re-shape without coordinating callers):
  *   meta            → { sessionId, sessionSecret (hex), status, currentQuestionIdx,
  *                        questionStartedAtMs, totalQuestions, quizId?, firstCorrectAwarded? }
  *   question:{idx}  → { text, timeLimitSec, points, answers: [{text}], correctIdx }
@@ -34,8 +35,8 @@
  *   discriminator: `host-*` messages only succeed if the socket is flagged as the
  *   host via the HOST_TOKEN query param (see +server.ts). Participant messages
  *   (join / submit-answer / reconnect) are the default path. A participant socket
- *   sending `host-*` messages receives UNAUTHENTICATED. See for the
- *   hostToken minting flow.
+ *   sending `host-*` messages receives UNAUTHENTICATED. The host token is minted
+ *   by the session-start form action so the role param is not attacker-surface.
  */
 import { DurableObject } from 'cloudflare:workers';
 import { and, eq } from 'drizzle-orm';
@@ -156,9 +157,9 @@ export class QuizSession extends DurableObject<Env> {
 	override async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url);
 
-		// Internal RPC-ish routes used by the Worker side (session-start, nightly-cleanup
-		// reconcile, test harnesses). Prefixed with /internal/ so they can't
-		// collide with WS upgrade paths.
+		// Internal RPC-ish routes used by the Worker side (session-start form
+		// action, nightly reconcile cron, test harnesses). Prefixed with
+		// /internal/ so they can't collide with WS upgrade paths.
 		if (url.pathname === '/internal/start' && request.method === 'POST') {
 			const body = await request.json().catch(() => null);
 			const parsed = v.safeParse(internalStartSchema, body);
@@ -177,8 +178,8 @@ export class QuizSession extends DurableObject<Env> {
 		}
 
 		if (url.pathname === '/internal/reconcile' && request.method === 'POST') {
-			// Used by nightly cron. If the DO was evicted between reveal and end, flush
-			// final state to D1. Idempotent — calling twice is fine.
+			// Used by the nightly cleanup cron. If the DO was evicted between reveal
+			// and end, flush final state to D1. Idempotent — calling twice is fine.
 			await this.#persistFinalToD1();
 			return new Response(JSON.stringify({ ok: true }), {
 				headers: { 'content-type': 'application/json' }
@@ -320,8 +321,8 @@ export class QuizSession extends DurableObject<Env> {
 	 * `active`, arms the first alarm, broadcasts `question-started`.
 	 *
 	 * Parameter is optional for the host WS path (`host-start`) — if absent we
-	 * reuse the stored quizId. session-start seeds meta.quizId via /internal/start before
-	 * the host socket connects.
+	 * reuse the stored quizId. The session-start server action seeds meta.quizId
+	 * via /internal/start before the host socket connects.
 	 */
 	async #start(quizIdArg?: string): Promise<void> {
 		const meta = await this.#loadMeta();
@@ -399,7 +400,8 @@ export class QuizSession extends DurableObject<Env> {
 			.where(eq(quizSessionsTable.id, nextMeta.sessionId))
 			.run()
 			.catch((err) => {
-				// Don't fail the start — D1 can be reconciled by  Log for tail.
+				// Don't fail the start — D1 can be reconciled by the nightly cron.
+				// Log for tail.
 				console.error(`[QuizSession ${nextMeta.sessionId}] D1 status update failed`, err);
 			});
 
@@ -590,8 +592,7 @@ export class QuizSession extends DurableObject<Env> {
 
 		await this.#persistFinalToD1().catch((err) => {
 			// Don't throw — status='ended' in DO storage is the authoritative
-			// signal; the nightly reconcile cron  retries via
-			// /internal/reconcile.
+			// signal; the nightly reconcile cron retries via /internal/reconcile.
 			console.error(`[QuizSession ${meta.sessionId}] final D1 persistence failed`, err);
 		});
 	}

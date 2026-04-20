@@ -7,7 +7,7 @@ import { bumpRateLimit, enforceRateLimit, hashEmail } from './rate-limit';
 
 /**
  * Runs inside the workers pool so `env.QUIZMO_AUTH_KV` is a real miniflare
- * KVNamespace. Tests the helpers against the happy + over-limit
+ * KVNamespace. Tests the rate-limit helpers against the happy + over-limit
  * paths.
  */
 

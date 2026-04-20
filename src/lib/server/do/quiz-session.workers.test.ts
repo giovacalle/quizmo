@@ -10,8 +10,8 @@ import { describe, expect, it } from 'vitest';
  *     confirm the stored bytes persist.
  *
  * Tests that depend on a full quiz fixture (scoring across a whole quiz, alarm
- * cadence) are left as follow-up work for launch when we have auth + a live D1 to
- * drive an end-to-end run.
+ * cadence) are deferred until auth + a live D1 are wired up to drive an
+ * end-to-end run.
  */
 
 function stubFor(sessionId: string) {
@@ -115,10 +115,7 @@ describe('QuizSession DO — nickname dedup on join', () => {
 			// `webSocketMessage` is declared `?` on `DurableObject` — the subclass
 			// overrides it unconditionally, so narrow here.
 			if (!instance.webSocketMessage) throw new Error('DO does not implement webSocketMessage');
-			await instance.webSocketMessage(
-				ws,
-				JSON.stringify({ type: 'join', payload: { nickname } })
-			);
+			await instance.webSocketMessage(ws, JSON.stringify({ type: 'join', payload: { nickname } }));
 		});
 	}
 

@@ -122,7 +122,9 @@
 			</div>
 			<div>
 				<p class="text-muted-foreground text-xs tracking-wider uppercase">Code</p>
-				<p class="text-foreground mt-1 font-mono text-lg font-semibold tracking-[0.2em] tabular-nums">
+				<p
+					class="text-foreground mt-1 font-mono text-lg font-semibold tracking-[0.2em] tabular-nums"
+				>
 					{data.session.code}
 				</p>
 			</div>
