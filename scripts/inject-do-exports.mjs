@@ -1,30 +1,61 @@
 #!/usr/bin/env bun
 /**
- * Post-build step: compile the Durable Object + cron entry and append
- * `export { QuizSession }` + `export { scheduled }` to the adapter-cloudflare
- * generated worker entry. The adapter emits only `export default` — wrangler
- * requires DO classes as named exports, and Cloudflare Cron Triggers invoke
- * the `scheduled()` export directly.
+ * inject-do-exports — post-build step that appends named exports (QuizSession
+ * Durable Object + scheduled cron handler) to the worker bundle emitted by
+ * @sveltejs/adapter-cloudflare.
  *
- * Single-bundle design (since :
- *   Both entries (QuizSession, scheduledHandler) get compiled in ONE esbuild
- *   pass via a synthetic virtual entry module that imports + re-exports them.
- *   This is essential because both modules pull in Drizzle / Valibot / etc; if
- *   we emitted two separate bundles the second append would redeclare the
- *   shared symbols at the top level of `_worker.js`, causing
- *     "The symbol 'drizzle' has already been declared"
- *   at deploy time. One bundle = single set of symbol declarations.
+ * Why this exists
+ * ---------------
+ * Cloudflare Workers requires:
+ *   - DO classes to be named exports on the entry module (QuizSession).
+ *   - scheduled(event, env, ctx) to be a named export for Cron Triggers.
  *
- * Why the extra hoop (still, as of @sveltejs/adapter-cloudflare 7.2.x):
- *   The adapter's `files/worker.js` template ends in
- *     `export { worker_default as default };`
- *   and offers no hook for named-export extension. We inline the compiled
- *   named exports into the same `_worker.js` so there's still exactly one
- *   Worker script at deploy.
+ * @sveltejs/adapter-cloudflare (7.2.x) only emits `export default { fetch }`
+ * on .svelte-kit/cloudflare/_worker.js (see the adapter's `files/worker.js`
+ * template — it ends in `export { worker_default as default };` with no
+ * extension hook). Without this script:
+ *   - wrangler deploy rejects the worker (the `QuizSession` binding declared
+ *     in wrangler.jsonc resolves to an undefined class).
+ *   - Cron Triggers fire against the Worker and no `scheduled` export means
+ *     they're silent no-ops.
  *
- * Safety gate:
- *   Refuses to run if `src/lib/server/do/quiz-session.ts` still carries the
- *   original scaffold placeholder marker.
+ * How it works
+ * ------------
+ * esbuild compiles src/lib/server/do/quiz-session.ts and
+ * src/lib/server/cron/entry.ts through a synthetic virtual entry
+ * (.svelte-kit/__quizmo-worker-extras-entry.ts) that imports + re-exports
+ * both modules. The resulting ESM bundle is appended to _worker.js with an
+ * `export { QuizSession, scheduled }` trailer.
+ *
+ * Single-bundle design (deliberate)
+ * ---------------------------------
+ * Two separate esbuild passes would duplicate shared deps (Drizzle, Valibot,
+ * Neverthrow) at the top level of _worker.js and break deploy-dry-run with
+ *   "The symbol 'drizzle' has already been declared"
+ * One bundle = one set of top-level symbol declarations. esbuild dedupes the
+ * shared dep graph across the two entries.
+ *
+ * Identifier renaming
+ * -------------------
+ * Both `QuizSession` and `scheduledHandler` get renamed to internal symbols
+ * (`__quizmoQuizSessionImpl`, `__quizmoScheduledImpl`) before the bundle is
+ * appended — otherwise the final re-export `export { QuizSession, scheduled }`
+ * would collide with the bundle's own top-level declarations.
+ *
+ * Safety gates
+ * ------------
+ *   - Refuses to run if src/lib/server/do/quiz-session.ts still carries the
+ *     original scaffold placeholder marker.
+ *   - Refuses to run if `class QuizSession` isn't present in the DO source.
+ *   - Sentinel-guarded: if the output already contains the injection marker,
+ *     this is a rerun; skip rather than double-append.
+ *   - Saves _worker.js to _worker.js.pre-inject.bak before mutating in place.
+ *
+ * When this can go away
+ * ---------------------
+ * If/when @sveltejs/adapter-cloudflare lands first-class support for named
+ * exports alongside the default handler, delete this script and configure
+ * the adapter directly. Until then, this is the pragmatic path.
  *
  * Run automatically as part of `bun run build` (see package.json).
  */
