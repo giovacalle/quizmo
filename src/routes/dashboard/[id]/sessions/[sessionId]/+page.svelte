@@ -50,9 +50,9 @@
 		return `${minutes}m ${seconds}s`;
 	}
 
-	// Podium tint matches the Leaderboard component's accent-opacity decision
-	// (ops-notes-D-HOST.md deviation #5): no gold/silver/bronze literals, the
-	// `accent` token degrades gracefully through opacity in both light + dark.
+	// Podium tint matches the Leaderboard component's accent-opacity decision:
+	// no gold/silver/bronze literals, the `accent` token degrades gracefully
+	// through opacity in both light + dark.
 	function podiumClasses(position: number): string {
 		if (position === 1) return 'border-accent bg-accent/60';
 		if (position === 2) return 'border-accent/70 bg-accent/40';

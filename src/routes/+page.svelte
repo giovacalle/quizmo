@@ -51,35 +51,11 @@
 			description: 'Players see the correct answer and their ranking the moment the timer runs out.'
 		}
 	];
-</script>
 
-<svelte:head>
-	<title>Quizmo · Host live quizzes in seconds</title>
-	<meta
-		name="description"
-		content="Create a quiz, share the code, play live together. Fast, frictionless live quizzes for classrooms, teams, and friends."
-	/>
-	<meta property="og:title" content="Quizmo · Host live quizzes in seconds" />
-	<meta
-		property="og:description"
-		content="Create a quiz, share the code, play live together."
-	/>
-	<meta property="og:type" content="website" />
-	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content="Quizmo · Host live quizzes in seconds" />
-	<meta
-		name="twitter:description"
-		content="Create a quiz, share the code, play live together."
-	/>
-	<link rel="canonical" href="https://quizmo.giova.dev/" />
-	<meta property="og:image" content="https://quizmo.giova.dev/og-image.svg" />
-	<meta property="og:image:type" content="image/svg+xml" />
-	<meta property="og:image:width" content="1200" />
-	<meta property="og:image:height" content="630" />
-	<meta property="og:image:alt" content="Quizmo — Host live quizzes in seconds" />
-	<meta name="twitter:image" content="https://quizmo.giova.dev/og-image.svg" />
-	<!-- eslint-disable svelte/no-at-html-tags -- JSON-LD is trusted static content -->
-	{@html `<script type="application/ld+json">${JSON.stringify({
+	// JSON-LD assembled as a string so the inline `<script>` tag doesn't confuse
+	// the Svelte/eslint parser when rendered via `{@html}`. The split `</${'script'}>`
+	// trailer keeps the template literal out of the outer document's tag scanner.
+	const jsonLdPayload = {
 		'@context': 'https://schema.org',
 		'@type': 'SoftwareApplication',
 		name: 'Quizmo',
@@ -89,24 +65,39 @@
 		applicationSubCategory: 'Quiz',
 		operatingSystem: 'Web',
 		browserRequirements: 'Requires JavaScript and a modern browser with WebSocket support.',
-		offers: {
-			'@type': 'Offer',
-			price: '0',
-			priceCurrency: 'USD'
-		},
+		offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
 		featureList: [
 			'Live multiplayer quizzes',
 			'Six-character join codes',
 			'Mobile-friendly participant view',
 			'Real-time leaderboard',
 			'Instant feedback after each question'
-		],
-		author: {
-			'@type': 'Person',
-			name: 'Giovanni Callegari',
-			url: 'https://giova.dev'
-		}
-	})}</script>`}
+		]
+	};
+	const jsonLdHtml = `<script type="application/ld+json">${JSON.stringify(jsonLdPayload)}</${'script'}>`;
+</script>
+
+<svelte:head>
+	<title>Quizmo · Host live quizzes in seconds</title>
+	<meta
+		name="description"
+		content="Create a quiz, share the code, play live together. Fast, frictionless live quizzes for classrooms, teams, and friends."
+	/>
+	<meta property="og:title" content="Quizmo · Host live quizzes in seconds" />
+	<meta property="og:description" content="Create a quiz, share the code, play live together." />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content="Quizmo · Host live quizzes in seconds" />
+	<meta name="twitter:description" content="Create a quiz, share the code, play live together." />
+	<link rel="canonical" href="https://quizmo.giova.dev/" />
+	<meta property="og:image" content="https://quizmo.giova.dev/og-image.svg" />
+	<meta property="og:image:type" content="image/svg+xml" />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta property="og:image:alt" content="Quizmo — Host live quizzes in seconds" />
+	<meta name="twitter:image" content="https://quizmo.giova.dev/og-image.svg" />
+	<!-- eslint-disable svelte/no-at-html-tags -- JSON-LD is trusted static content -->
+	{@html jsonLdHtml}
 </svelte:head>
 
 <main class="bg-background text-foreground min-h-dvh">

@@ -38,7 +38,7 @@ export function readAuthEnv(platformEnv: App.Platform['env']): AuthEnv {
 		BETTER_AUTH_SECRET: raw.BETTER_AUTH_SECRET,
 		// Resend is only needed for sendOTP. If absent, the plugin callback throws
 		// at send-time — which surfaces as an AppError('INTERNAL_ERROR', 'Could not
-		// send code') in the /login action, and is documented in ops-todo.
+		// send code') in the /login action.
 		RESEND_API_KEY: raw.RESEND_API_KEY ?? '',
 		RESEND_FROM_EMAIL: raw.RESEND_FROM_EMAIL ?? '',
 		APP_URL: raw.APP_URL ?? 'http://localhost:5173'
