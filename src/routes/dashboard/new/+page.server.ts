@@ -1,52 +1,63 @@
-import { redirect } from '@sveltejs/kit';
-import * as v from 'valibot';
+import { fail, redirect } from '@sveltejs/kit';
+import { message, superValidate } from 'sveltekit-superforms';
+import { valibot } from 'sveltekit-superforms/adapters';
 
 import { db } from '$lib/server/db/client';
 import { answers, questions } from '$lib/server/db/schema';
-import { quizWithQuestionsSchema } from '$lib/server/db/validators';
 import { throwAppError } from '$lib/server/errors';
+import { quizWithQuestionsSchema } from '$lib/validators';
 
 import type { Actions, PageServerLoad } from './$types';
 
+/**
+ * Seed for a fresh draft: the schema minimums are 3 questions × 2 answers each,
+ * so the initial form is structurally valid and the user only has to fill text.
+ * Passed to `valibot(..., { defaults })` so `superValidate` returns this shape
+ * on first load without emitting minLength errors.
+ */
+const NEW_QUIZ_DEFAULTS = {
+	title: '',
+	description: '',
+	questions: Array.from({ length: 3 }, () => ({
+		text: '',
+		timeLimitSec: 20,
+		points: 1000,
+		answers: [
+			{ text: '', isCorrect: true },
+			{ text: '', isCorrect: false }
+		]
+	}))
+};
+
 export const load: PageServerLoad = async () => {
-	return {};
+	const form = await superValidate(
+		valibot(quizWithQuestionsSchema, { defaults: NEW_QUIZ_DEFAULTS })
+	);
+	return { form };
 };
 
 /**
- * Create a quiz with its full question tree. The body is JSON-stringified in the
- * client under a single `payload` field so we can decode it straight into the
- * existing `quizWithQuestionsSchema` (which covers 3–25 questions, 2–6 answers,
- * exactly-one-correct-per-question — all business rules).
+ * Create a quiz with its full question tree. `superValidate` parses the JSON
+ * body produced by `dataType: 'json'` on the client and runs the full
+ * `quizWithQuestionsSchema` pipe (3-25 questions, 2-6 answers, exactly one
+ * correct per question — all business rules).
  *
  * Cap enforcement is TOCTOU-free via a conditional INSERT: we attempt a single
- * INSERT...SELECT...WHERE (<3 active) AND (<20 non-archived), then check
+ * `INSERT...SELECT...WHERE (<3 active) AND (<20 non-archived)`, then check
  * `meta.changes` and follow up with COUNTs only on failure to produce the
- * specific AppError message.
+ * specific AppError message. Archived quizzes don't count against caps.
  */
 export const actions: Actions = {
-	create: async ({ locals, platform, request }) => {
+	create: async (event) => {
+		const { locals, platform } = event;
 		if (!platform) return throwAppError('INTERNAL_ERROR', 'Platform bindings missing');
 		const user = locals.user;
 		if (!user) return throwAppError('UNAUTHENTICATED', 'Sign in required');
 
-		const form = await request.formData();
-		const raw = form.get('payload');
-		if (typeof raw !== 'string') return throwAppError('INVALID_INPUT', 'Missing payload');
+		const form = await superValidate(event, valibot(quizWithQuestionsSchema));
+		if (!form.valid) return fail(400, { form });
 
-		let parsedJson: unknown;
-		try {
-			parsedJson = JSON.parse(raw);
-		} catch {
-			return throwAppError('INVALID_INPUT', 'Malformed payload');
-		}
-
-		const parse = v.safeParse(quizWithQuestionsSchema, parsedJson);
-		if (!parse.success) {
-			const firstMsg = parse.issues[0]?.message ?? 'Invalid quiz data';
-			return throwAppError('INVALID_INPUT', firstMsg);
-		}
-
-		const payload = parse.output;
+		const payload = form.data;
 		const now = Date.now();
 		const quizId = crypto.randomUUID();
 		const d1 = platform.env.QUIZMO_DB;
@@ -75,9 +86,11 @@ export const actions: Actions = {
 				.bind(user.id)
 				.first<{ active: number; nonArchived: number }>();
 
-			if ((countsRow?.active ?? 0) >= 3)
-				return throwAppError('INVALID_INPUT', 'Active quiz limit reached (3 max)');
-			return throwAppError('INVALID_INPUT', 'Lifetime quota reached (20 max non-archived)');
+			const msg =
+				(countsRow?.active ?? 0) >= 3
+					? 'Active quiz limit reached (3 max)'
+					: 'Lifetime quota reached (20 max non-archived)';
+			return message(form, msg, { status: 400 });
 		}
 
 		// Persist questions + answers. D1 supports Drizzle's batch API for

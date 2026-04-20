@@ -1,11 +1,12 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { and, asc, eq } from 'drizzle-orm';
-import * as v from 'valibot';
+import { message, superValidate } from 'sveltekit-superforms';
+import { valibot } from 'sveltekit-superforms/adapters';
 
 import { db } from '$lib/server/db/client';
 import { answers, questions, quizzes } from '$lib/server/db/schema';
-import { quizWithQuestionsSchema } from '$lib/server/db/validators';
 import { throwAppError } from '$lib/server/errors';
+import { quizWithQuestionsSchema } from '$lib/validators';
 
 import type { Actions, PageServerLoad } from './$types';
 
@@ -57,34 +58,41 @@ export const load: PageServerLoad = async ({ locals, platform, params }) => {
 		answersByQuestion[q.id] = rows;
 	}
 
-	return {
-		quiz,
-		initial: {
-			title: quiz.title,
-			description: quiz.description ?? '',
-			questions: qs.map((q) => ({
-				text: q.text,
-				timeLimitSec: q.timeLimitSec,
-				points: q.points,
-				answers: (answersByQuestion[q.id] ?? []).map((a) => ({
-					text: a.text,
-					isCorrect: a.isCorrect
-				}))
+	const initial = {
+		title: quiz.title,
+		description: quiz.description ?? '',
+		questions: qs.map((q) => ({
+			text: q.text,
+			timeLimitSec: q.timeLimitSec,
+			points: q.points,
+			answers: (answersByQuestion[q.id] ?? []).map((a) => ({
+				text: a.text,
+				isCorrect: a.isCorrect
 			}))
-		}
+		}))
 	};
+
+	// Preload the existing quiz into superforms' SuperValidated shape. Subsequent
+	// failed POSTs round-trip the user's unsaved edits via superforms' v2 defaults.
+	const form = await superValidate(initial, valibot(quizWithQuestionsSchema));
+
+	return { quiz, form };
 };
 
 export const actions: Actions = {
 	/**
 	 * Update an existing quiz. Simplest correct model: delete the question tree
 	 * and re-create it. Quizzes are bounded (≤25 questions × ≤6 answers) so the
-	 * cost is modest and the shape matches the client's single-payload submit.
+	 * cost is modest and the shape matches the client's single JSON submit.
 	 */
-	update: async ({ locals, platform, params, request }) => {
+	update: async (event) => {
+		const { locals, platform, params } = event;
 		if (!platform) return fail(500, { message: 'Platform bindings missing' });
 		const user = locals.user;
 		if (!user) return fail(401, { message: 'Sign in required' });
+
+		const form = await superValidate(event, valibot(quizWithQuestionsSchema));
+		if (!form.valid) return fail(400, { form });
 
 		const client = db(platform.env.QUIZMO_DB);
 		const existing = await client
@@ -92,25 +100,11 @@ export const actions: Actions = {
 			.from(quizzes)
 			.where(and(eq(quizzes.id, params.id), eq(quizzes.ownerId, user.id)))
 			.get();
-		if (!existing) return fail(404, { message: 'Quiz not found' });
-		if (existing.status === 'archived') return fail(400, { message: 'Unarchive before editing' });
+		if (!existing) return message(form, 'Quiz not found', { status: 404 });
+		if (existing.status === 'archived')
+			return message(form, 'Unarchive before editing', { status: 400 });
 
-		const form = await request.formData();
-		const raw = form.get('payload');
-		if (typeof raw !== 'string') return fail(400, { message: 'Missing payload' });
-
-		let parsedJson: unknown;
-		try {
-			parsedJson = JSON.parse(raw);
-		} catch {
-			return fail(400, { message: 'Malformed payload' });
-		}
-
-		const parse = v.safeParse(quizWithQuestionsSchema, parsedJson);
-		if (!parse.success)
-			return fail(400, { message: parse.issues[0]?.message ?? 'Invalid quiz data' });
-
-		const payload = parse.output;
+		const payload = form.data;
 		const now = Date.now();
 
 		await client
@@ -147,7 +141,7 @@ export const actions: Actions = {
 		await client.insert(questions).values(questionRows).run();
 		await client.insert(answers).values(answerRows).run();
 
-		return { success: true };
+		return message(form, 'Saved');
 	},
 
 	/**

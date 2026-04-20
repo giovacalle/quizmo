@@ -4,6 +4,9 @@
 	import * as Button from '$lib/components/ui/button';
 
 	import QuizForm from '../_components/quiz-form.svelte';
+	import type { PageData } from './$types';
+
+	let { data }: { data: PageData } = $props();
 </script>
 
 <svelte:head>
@@ -25,5 +28,5 @@
 		</p>
 	</header>
 
-	<QuizForm action="?/create" submitLabel="Create quiz" />
+	<QuizForm action="?/create" submitLabel="Create quiz" form={data.form} />
 </main>

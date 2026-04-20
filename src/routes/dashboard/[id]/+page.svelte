@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
+	import HistoryIcon from '@lucide/svelte/icons/history';
 	import Loader2Icon from '@lucide/svelte/icons/loader-2';
 	import PlayIcon from '@lucide/svelte/icons/play';
 	import { toast } from 'svelte-sonner';
@@ -52,44 +53,50 @@
 				Update questions and answers. Changes save on submit.
 			</p>
 		</div>
-		<form
-			method="POST"
-			action="?/startSession"
-			use:enhance={() => {
-				starting = true;
-				return async ({ result }) => {
-					starting = false;
-					if (result.type === 'redirect') {
-						window.location.href = result.location;
-						return;
-					}
-					if (result.type === 'failure') {
-						const msg =
-							typeof result.data?.message === 'string'
-								? result.data.message
-								: 'Could not start session';
-						toast.error(msg);
-					}
-				};
-			}}
-		>
-			<Button.Root
-				type="submit"
-				size="lg"
-				aria-disabled={starting}
-				onclick={(e) => {
-					if (starting) e.preventDefault();
+		<div class="flex flex-wrap items-center gap-2">
+			<Button.Root href="/dashboard/{data.quiz.id}/sessions" variant="outline" size="sm">
+				<HistoryIcon class="mr-1.5 size-4" aria-hidden="true" />
+				Past sessions
+			</Button.Root>
+			<form
+				method="POST"
+				action="?/startSession"
+				use:enhance={() => {
+					starting = true;
+					return async ({ result }) => {
+						starting = false;
+						if (result.type === 'redirect') {
+							window.location.href = result.location;
+							return;
+						}
+						if (result.type === 'failure') {
+							const msg =
+								typeof result.data?.message === 'string'
+									? result.data.message
+									: 'Could not start session';
+							toast.error(msg);
+						}
+					};
 				}}
 			>
-				{#if starting}
-					<Loader2Icon class="mr-2 size-4 animate-spin" />
-				{:else}
-					<PlayIcon class="mr-2 size-4" />
-				{/if}
-				Start Session
-			</Button.Root>
-		</form>
+				<Button.Root
+					type="submit"
+					size="lg"
+					aria-disabled={starting}
+					onclick={(e) => {
+						if (starting) e.preventDefault();
+					}}
+				>
+					{#if starting}
+						<Loader2Icon class="mr-2 size-4 animate-spin" />
+					{:else}
+						<PlayIcon class="mr-2 size-4" />
+					{/if}
+					Start Session
+				</Button.Root>
+			</form>
+		</div>
 	</header>
 
-	<QuizForm action="?/update" submitLabel="Save changes" initial={data.initial} />
+	<QuizForm action="?/update" submitLabel="Save changes" form={data.form} />
 </main>

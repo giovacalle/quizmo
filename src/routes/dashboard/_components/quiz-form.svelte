@@ -3,214 +3,173 @@
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import TrashIcon from '@lucide/svelte/icons/trash-2';
 	import { toast } from 'svelte-sonner';
+	import { arrayProxy, superForm, type SuperValidated } from 'sveltekit-superforms';
+	import { valibotClient } from 'sveltekit-superforms/adapters';
 
-	import { applyAction, enhance } from '$app/forms';
 	import * as Button from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
+	import * as Form from '$lib/components/ui/form';
 	import * as Input from '$lib/components/ui/input';
 	import * as Label from '$lib/components/ui/label';
 	import * as RadioGroup from '$lib/components/ui/radio-group';
-
-	interface AnswerInput {
-		text: string;
-		isCorrect: boolean;
-	}
-	interface QuestionInput {
-		text: string;
-		timeLimitSec: number;
-		points: number;
-		answers: AnswerInput[];
-	}
-	interface QuizFormValue {
-		title: string;
-		description: string;
-		questions: QuestionInput[];
-	}
+	import { quizWithQuestionsSchema, type QuizWithQuestions } from '$lib/validators';
 
 	interface Props {
-		initial?: QuizFormValue;
+		form: SuperValidated<QuizWithQuestions>;
 		action: string;
 		submitLabel: string;
 	}
 
-	let { initial, action, submitLabel }: Props = $props();
+	let { form: initialForm, action, submitLabel }: Props = $props();
 
-	// Sensible default: 3 questions with 2 answers each — matches the schema's
-	// minimum (questions >= 3, answers >= 2), so a fresh draft is already valid.
-	function blankAnswer(): AnswerInput {
-		return { text: '', isCorrect: false };
+	// `superForm` consumes the initial SuperValidated snapshot once and manages
+	// its own stores from there. The prop legitimately isn't re-read after mount
+	// (the parent route remounts the component on quiz-id change via SvelteKit's
+	// default [id] key), so the `state_referenced_locally` warning is a
+	// false-positive here.
+	// svelte-ignore state_referenced_locally
+	const superform = superForm(initialForm, {
+		// Required for nested arrays/objects — FormData encoding would flatten away
+		// the answer-per-question structure. `superValidate(event, ...)` auto-parses
+		// the JSON body on the server side.
+		dataType: 'json',
+		validators: valibotClient(quizWithQuestionsSchema),
+		// Preserve unsaved edits on failure (cap breach, validation). v2's default
+		// is `resetForm: true`, which only applies on success.
+		resetForm: false,
+		onUpdated({ form }) {
+			if (form.message) {
+				if (form.valid) toast.success(form.message);
+				else toast.error(form.message);
+			}
+		}
+	});
+
+	const { form: formData, errors, enhance, submitting, message } = superform;
+
+	// Top-level `questions` array. `values` is a Writable of the array (mutating
+	// it via store assignment triggers schema re-validation); `errors` holds
+	// array-level errors (minLength/maxLength); per-element errors sit under
+	// `$errors.questions[i]` (including the `v.check` "exactly one correct" that
+	// Valibot routes to the question-object path — lands as `string[]` because
+	// the last path segment is numeric, not `_errors`).
+	const { values: questions, errors: questionsErrors } = arrayProxy(superform, 'questions');
+
+	function blankAnswer(isCorrect = false) {
+		return { text: '', isCorrect };
 	}
-	function blankQuestion(): QuestionInput {
+	function blankQuestion() {
 		return {
 			text: '',
 			timeLimitSec: 20,
 			points: 1000,
-			answers: [{ ...blankAnswer(), isCorrect: true }, blankAnswer()]
+			answers: [blankAnswer(true), blankAnswer(false)]
 		};
 	}
 
-	// Untracked `initial` capture — the form is mounted once per create/edit nav,
-	// and subsequent edits are driven by the user. We deliberately do NOT $effect
-	// back-sync; the dashboard page key remounts on new quiz IDs.
-	const seedInitial = $derived.by(() => initial);
-	let title = $state('');
-	let description = $state('');
-	let questions = $state<QuestionInput[]>([]);
-
-	$effect(() => {
-		const seed = seedInitial;
-		title = seed?.title ?? '';
-		description = seed?.description ?? '';
-		questions =
-			seed?.questions && seed.questions.length > 0
-				? seed.questions.map((q) => ({
-						...q,
-						answers: q.answers.map((a) => ({ ...a }))
-					}))
-				: [blankQuestion(), blankQuestion(), blankQuestion()];
-	});
-
-	let submitting = $state(false);
-
 	function addQuestion() {
-		if (questions.length >= 25) {
+		if ($questions.length >= 25) {
 			toast.error('A quiz can have at most 25 questions');
 			return;
 		}
-		questions = [...questions, blankQuestion()];
+		$questions = [...$questions, blankQuestion()];
 	}
 	function removeQuestion(idx: number) {
-		if (questions.length <= 3) {
+		if ($questions.length <= 3) {
 			toast.error('A quiz needs at least 3 questions');
 			return;
 		}
-		questions = questions.filter((_, i) => i !== idx);
+		$questions = $questions.filter((_, i) => i !== idx);
+	}
+	// Answer-level mutations rebuild the whole `questions` array with the target
+	// question replaced — this routes through `$formData.questions = [...]` so Svelte's
+	// store auto-subscription calls `.set()` and formsnap re-validates. Mutating a
+	// captured nested reference (`q.answers = ...`) would skip the store contract.
+	function replaceQuestionAnswers(
+		qIdx: number,
+		build: (
+			current: (typeof $formData.questions)[number]['answers']
+		) => (typeof $formData.questions)[number]['answers']
+	) {
+		const q = $formData.questions[qIdx];
+		if (!q) return;
+		$formData.questions = $formData.questions.map((question, i) =>
+			i === qIdx ? { ...question, answers: build(q.answers) } : question
+		);
 	}
 	function addAnswer(qIdx: number) {
-		const q = questions[qIdx];
+		const q = $formData.questions[qIdx];
 		if (!q) return;
 		if (q.answers.length >= 6) {
 			toast.error('A question can have at most 6 answers');
 			return;
 		}
-		q.answers = [...q.answers, blankAnswer()];
+		replaceQuestionAnswers(qIdx, (answers) => [...answers, blankAnswer(false)]);
 	}
 	function removeAnswer(qIdx: number, aIdx: number) {
-		const q = questions[qIdx];
+		const q = $formData.questions[qIdx];
 		if (!q) return;
 		if (q.answers.length <= 2) {
 			toast.error('A question needs at least 2 answers');
 			return;
 		}
-		const removed = q.answers[aIdx];
-		q.answers = q.answers.filter((_, i) => i !== aIdx);
-		// If we removed the only correct answer, move correctness to the first remaining.
-		if (removed?.isCorrect && !q.answers.some((a) => a.isCorrect) && q.answers[0]) {
-			q.answers[0].isCorrect = true;
-		}
+		replaceQuestionAnswers(qIdx, (answers) => {
+			const removed = answers[aIdx];
+			const next = answers.filter((_, i) => i !== aIdx);
+			// If we removed the only correct answer, promote the first remaining so
+			// the `v.check` "exactly one correct" invariant keeps holding.
+			if (removed?.isCorrect && !next.some((a) => a.isCorrect) && next[0]) {
+				next[0] = { ...next[0], isCorrect: true };
+			}
+			return next;
+		});
 	}
 	function setCorrect(qIdx: number, aIdx: number) {
-		const q = questions[qIdx];
-		if (!q) return;
-		q.answers = q.answers.map((a, i) => ({ ...a, isCorrect: i === aIdx }));
-	}
-
-	// Client-side validity gate — UX only. The server runs the full valibot pipe.
-	const clientValid = $derived(
-		title.trim().length > 0 &&
-			title.trim().length <= 120 &&
-			description.trim().length <= 500 &&
-			questions.length >= 3 &&
-			questions.length <= 25 &&
-			questions.every(
-				(q) =>
-					q.text.trim().length > 0 &&
-					q.text.trim().length <= 500 &&
-					q.timeLimitSec >= 5 &&
-					q.timeLimitSec <= 120 &&
-					q.points >= 100 &&
-					q.points <= 5000 &&
-					q.answers.length >= 2 &&
-					q.answers.length <= 6 &&
-					q.answers.filter((a) => a.isCorrect).length === 1 &&
-					q.answers.every((a) => a.text.trim().length > 0 && a.text.trim().length <= 200)
-			)
-	);
-
-	function buildPayload() {
-		return JSON.stringify({
-			title,
-			description: description.trim() ? description : undefined,
-			questions: questions.map((q) => ({
-				text: q.text,
-				timeLimitSec: Number(q.timeLimitSec),
-				points: Number(q.points),
-				answers: q.answers.map((a) => ({ text: a.text, isCorrect: !!a.isCorrect }))
-			}))
-		});
+		replaceQuestionAnswers(qIdx, (answers) =>
+			answers.map((a, i) => ({ ...a, isCorrect: i === aIdx }))
+		);
 	}
 </script>
 
-<form
-	method="POST"
-	{action}
-	use:enhance={() => {
-		submitting = true;
-		return async ({ result }) => {
-			submitting = false;
-			if (result.type === 'redirect') {
-				await applyAction(result);
-				return;
-			}
-			if (result.type === 'failure') {
-				const msg =
-					typeof result.data?.message === 'string' ? result.data.message : 'Could not save quiz';
-				toast.error(msg);
-			} else if (result.type === 'error') {
-				const msg =
-					result.error && typeof result.error === 'object' && 'message' in result.error
-						? String((result.error as { message: unknown }).message)
-						: 'Could not save quiz';
-				toast.error(msg);
-			}
-			await applyAction(result);
-		};
-	}}
-	class="space-y-6"
->
-	<input type="hidden" name="payload" value={buildPayload()} />
-
-	<!-- Metadata -->
+<form method="POST" {action} use:enhance class="space-y-6">
+	<!-- Basics -->
 	<Card.Root>
 		<Card.Header>
 			<Card.Title>Basics</Card.Title>
 			<Card.Description>A title players see in the lobby.</Card.Description>
 		</Card.Header>
 		<Card.Content class="space-y-4">
-			<div class="space-y-2">
-				<Label.Root for="quiz-title">Title</Label.Root>
-				<Input.Root
-					id="quiz-title"
-					type="text"
-					placeholder="e.g. Capitals of Europe"
-					maxlength={120}
-					bind:value={title}
-					required
-				/>
-				{#if title.trim().length === 0}
-					<p class="text-muted-foreground text-xs">1–120 characters.</p>
-				{/if}
-			</div>
-			<div class="space-y-2">
-				<Label.Root for="quiz-description">Description (optional)</Label.Root>
-				<Input.Root
-					id="quiz-description"
-					type="text"
-					placeholder="Short one-liner"
-					maxlength={500}
-					bind:value={description}
-				/>
-			</div>
+			<Form.Field form={superform} name="title">
+				<Form.Control>
+					{#snippet children({ props })}
+						<Form.Label>Title</Form.Label>
+						<Input.Root
+							{...props}
+							type="text"
+							placeholder="e.g. Capitals of Europe"
+							maxlength={120}
+							bind:value={$formData.title}
+						/>
+					{/snippet}
+				</Form.Control>
+				<Form.FieldErrors />
+			</Form.Field>
+
+			<Form.Field form={superform} name="description">
+				<Form.Control>
+					{#snippet children({ props })}
+						<Form.Label>Description (optional)</Form.Label>
+						<Input.Root
+							{...props}
+							type="text"
+							placeholder="Short one-liner"
+							maxlength={500}
+							bind:value={$formData.description}
+						/>
+					{/snippet}
+				</Form.Control>
+				<Form.FieldErrors />
+			</Form.Field>
 		</Card.Content>
 	</Card.Root>
 
@@ -220,7 +179,7 @@
 			<div>
 				<h2 class="text-foreground text-xl font-semibold tracking-tight">Questions</h2>
 				<p class="text-muted-foreground text-sm">
-					{questions.length} of 25 · 3 minimum · 2–6 answers, one correct
+					{$questions.length} of 25 · 3 minimum · 2–6 answers, one correct
 				</p>
 			</div>
 			<Button.Root type="button" variant="outline" onclick={addQuestion}>
@@ -229,131 +188,184 @@
 			</Button.Root>
 		</div>
 
-		{#each questions as question, qIdx (qIdx)}
-			<Card.Root>
-				<Card.Header>
-					<div class="flex items-center justify-between">
-						<Card.Title class="text-base">Question {qIdx + 1}</Card.Title>
-						<Button.Root
-							type="button"
-							variant="ghost"
-							size="icon-sm"
-							aria-label="Remove question"
-							onclick={() => removeQuestion(qIdx)}
-						>
-							<TrashIcon class="size-4" />
-						</Button.Root>
-					</div>
-				</Card.Header>
-				<Card.Content class="space-y-4">
-					<div class="space-y-2">
-						<Label.Root for={`q-${qIdx}-text`}>Question text</Label.Root>
-						<Input.Root
-							id={`q-${qIdx}-text`}
-							type="text"
-							placeholder="What's the question?"
-							maxlength={500}
-							bind:value={question.text}
-							required
-						/>
-					</div>
+		{#if $questionsErrors}
+			<p class="text-destructive text-sm" role="alert">{$questionsErrors}</p>
+		{/if}
 
-					<div class="grid gap-3 sm:grid-cols-2">
-						<div class="space-y-2">
-							<Label.Root for={`q-${qIdx}-time`}>Time limit (seconds)</Label.Root>
-							<Input.Root
-								id={`q-${qIdx}-time`}
-								type="number"
-								min={5}
-								max={120}
-								bind:value={question.timeLimitSec}
-							/>
+		{#each $questions as _question, qIdx (qIdx)}
+			{@const question = $formData.questions[qIdx]}
+			{#if question}
+				{@const correctIdx = question.answers.findIndex((a) => a.isCorrect)}
+				{@const questionLevelErrors = $errors.questions?.[qIdx]}
+				{@const crossFieldErrors = Array.isArray(questionLevelErrors) ? questionLevelErrors : null}
+				<Card.Root>
+					<Card.Header>
+						<div class="flex items-center justify-between">
+							<Card.Title class="text-base">Question {qIdx + 1}</Card.Title>
+							<Button.Root
+								type="button"
+								variant="ghost"
+								size="icon-sm"
+								aria-label="Remove question"
+								onclick={() => removeQuestion(qIdx)}
+							>
+								<TrashIcon class="size-4" />
+							</Button.Root>
 						</div>
-						<div class="space-y-2">
-							<Label.Root for={`q-${qIdx}-points`}>Base points</Label.Root>
-							<Input.Root
-								id={`q-${qIdx}-points`}
-								type="number"
-								min={100}
-								max={5000}
-								step={100}
-								bind:value={question.points}
-							/>
-						</div>
-					</div>
-
-					<div class="space-y-2">
-						<p class="text-foreground mb-1 text-sm font-medium">Answers</p>
-						<RadioGroup.Root
-							value={String(
-								question.answers.findIndex((a) => a.isCorrect) >= 0
-									? question.answers.findIndex((a) => a.isCorrect)
-									: 0
-							)}
-							onValueChange={(val) => setCorrect(qIdx, Number(val))}
-							class="space-y-2"
-						>
-							{#each question.answers as answer, aIdx (aIdx)}
-								<div class="flex items-center gap-2">
-									<div
-										class="border-border bg-muted/30 inline-flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs"
-									>
-										<RadioGroup.Item
-											value={String(aIdx)}
-											id={`q-${qIdx}-a-${aIdx}-correct`}
-											aria-label={`Mark answer ${aIdx + 1} as correct`}
-										/>
-										<Label.Root
-											for={`q-${qIdx}-a-${aIdx}-correct`}
-											class="cursor-pointer text-xs font-medium"
-										>
-											Correct
-										</Label.Root>
-									</div>
+					</Card.Header>
+					<Card.Content class="space-y-4">
+						<Form.Field form={superform} name={`questions[${qIdx}].text`}>
+							<Form.Control>
+								{#snippet children({ props })}
+									<Form.Label>Question text</Form.Label>
 									<Input.Root
+										{...props}
 										type="text"
-										placeholder={`Answer ${aIdx + 1}`}
-										maxlength={200}
-										bind:value={answer.text}
-										required
-										class="flex-1"
+										placeholder="What's the question?"
+										maxlength={500}
+										bind:value={$formData.questions[qIdx]!.text}
 									/>
-									<Button.Root
-										type="button"
-										variant="ghost"
-										size="icon-sm"
-										aria-label="Remove answer"
-										onclick={() => removeAnswer(qIdx, aIdx)}
-									>
-										<TrashIcon class="size-4" />
-									</Button.Root>
-								</div>
+								{/snippet}
+							</Form.Control>
+							<Form.FieldErrors />
+						</Form.Field>
+
+						<div class="grid gap-3 sm:grid-cols-2">
+							<Form.Field form={superform} name={`questions[${qIdx}].timeLimitSec`}>
+								<Form.Control>
+									{#snippet children({ props })}
+										<Form.Label>Time limit (seconds)</Form.Label>
+										<Input.Root
+											{...props}
+											type="number"
+											min={5}
+											max={120}
+											bind:value={$formData.questions[qIdx]!.timeLimitSec}
+										/>
+									{/snippet}
+								</Form.Control>
+								<Form.FieldErrors />
+							</Form.Field>
+
+							<Form.Field form={superform} name={`questions[${qIdx}].points`}>
+								<Form.Control>
+									{#snippet children({ props })}
+										<Form.Label>Base points</Form.Label>
+										<Input.Root
+											{...props}
+											type="number"
+											min={100}
+											max={5000}
+											step={100}
+											bind:value={$formData.questions[qIdx]!.points}
+										/>
+									{/snippet}
+								</Form.Control>
+								<Form.FieldErrors />
+							</Form.Field>
+						</div>
+
+						<!-- Answers: a nested array. Each answer's text binds directly against
+					     `$formData.questions[qIdx].answers[aIdx].text` so Svelte's store
+					     auto-subscription calls `.set()` on the form store and formsnap re-validates.
+					     The `v.check` "exactly one correct" invariant is encoded here via a RadioGroup
+					     and enforced on the server by `questionWithAnswersSchema`. -->
+						<Form.Fieldset form={superform} name={`questions[${qIdx}].answers`}>
+							<Form.Legend>Answers</Form.Legend>
+							<RadioGroup.Root
+								value={String(correctIdx >= 0 ? correctIdx : 0)}
+								onValueChange={(val) => setCorrect(qIdx, Number(val))}
+								class="space-y-2"
+							>
+								{#each question.answers as _answer, aIdx (aIdx)}
+									<div class="flex items-center gap-2">
+										<div
+											class="border-border bg-muted/30 inline-flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs"
+										>
+											<RadioGroup.Item
+												value={String(aIdx)}
+												id={`q-${qIdx}-a-${aIdx}-correct`}
+												aria-label={`Mark answer ${aIdx + 1} as correct`}
+											/>
+											<Label.Root
+												for={`q-${qIdx}-a-${aIdx}-correct`}
+												class="cursor-pointer text-xs font-medium"
+											>
+												Correct
+											</Label.Root>
+										</div>
+										<Form.Field
+											form={superform}
+											name={`questions[${qIdx}].answers[${aIdx}].text`}
+											class="flex-1 space-y-0"
+										>
+											<Form.Control>
+												{#snippet children({ props })}
+													<Input.Root
+														{...props}
+														type="text"
+														placeholder={`Answer ${aIdx + 1}`}
+														maxlength={200}
+														bind:value={$formData.questions[qIdx]!.answers[aIdx]!.text}
+													/>
+												{/snippet}
+											</Form.Control>
+											<Form.FieldErrors class="mt-1" />
+										</Form.Field>
+										<Button.Root
+											type="button"
+											variant="ghost"
+											size="icon-sm"
+											aria-label="Remove answer"
+											onclick={() => removeAnswer(qIdx, aIdx)}
+										>
+											<TrashIcon class="size-4" />
+										</Button.Root>
+									</div>
+								{/each}
+							</RadioGroup.Root>
+							<!-- Array-level errors on the answers list (minLength "2", maxLength "6"). The
+						     error path is `answers._errors`; Formsnap's extractor pulls either shape. -->
+							<Form.FieldErrors />
+						</Form.Fieldset>
+
+						<!-- Cross-field "exactly one correct" error. Valibot's `v.check` on
+					     `questionWithAnswersSchema` emits at path `['questions', qIdx]`, which
+					     superforms routes to `$errors.questions[qIdx]` as a `string[]` (numeric
+					     last segment → array slot, not `_errors`). -->
+						{#if crossFieldErrors}
+							{#each crossFieldErrors as err (err)}
+								<p class="text-destructive text-sm font-medium" role="alert">{err}</p>
 							{/each}
-						</RadioGroup.Root>
+						{/if}
+
 						<Button.Root type="button" variant="ghost" size="sm" onclick={() => addAnswer(qIdx)}>
 							<PlusIcon class="mr-1.5 size-3.5" />
 							Add answer
 						</Button.Root>
-					</div>
-				</Card.Content>
-			</Card.Root>
+					</Card.Content>
+				</Card.Root>
+			{/if}
 		{/each}
 	</div>
 
+	{#if $message}
+		<p class="text-destructive text-sm" role="alert">{$message}</p>
+	{/if}
+
 	<div class="flex flex-wrap items-center justify-end gap-3">
 		<Button.Root href="/dashboard" variant="ghost">Cancel</Button.Root>
-		<Button.Root
-			type="submit"
+		<Form.Button
 			size="lg"
-			aria-disabled={!clientValid || submitting}
+			aria-disabled={$submitting}
 			onclick={(e) => {
-				if (!clientValid || submitting) e.preventDefault();
+				if ($submitting) e.preventDefault();
 			}}
 		>
-			{#if submitting}
-				<Loader2Icon class="mr-2 size-4 animate-spin" />
+			{#if $submitting}
+				<Loader2Icon class="mr-2 size-4 animate-spin" aria-hidden="true" />
 			{/if}
 			{submitLabel}
-		</Button.Root>
+		</Form.Button>
 	</div>
 </form>
