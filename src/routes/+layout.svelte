@@ -4,7 +4,6 @@
 	import { fade } from 'svelte/transition';
 
 	import { page } from '$app/state';
-	import favicon from '$lib/assets/favicon.svg';
 	import ModeToggle from '$lib/components/mode-toggle.svelte';
 
 	import '../app.css';
@@ -19,7 +18,9 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+	<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+	<meta name="theme-color" content="#4F46E5" media="(prefers-color-scheme: light)" />
+	<meta name="theme-color" content="#0F0F14" media="(prefers-color-scheme: dark)" />
 </svelte:head>
 
 <ModeWatcher />

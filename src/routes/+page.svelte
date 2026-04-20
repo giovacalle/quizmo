@@ -71,6 +71,13 @@
 		name="twitter:description"
 		content="Create a quiz, share the code, play live together."
 	/>
+	<link rel="canonical" href="https://quizmo.giova.dev/" />
+	<meta property="og:image" content="https://quizmo.giova.dev/og-image.svg" />
+	<meta property="og:image:type" content="image/svg+xml" />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta property="og:image:alt" content="Quizmo — Host live quizzes in seconds" />
+	<meta name="twitter:image" content="https://quizmo.giova.dev/og-image.svg" />
 </svelte:head>
 
 <main class="bg-background text-foreground min-h-dvh">
