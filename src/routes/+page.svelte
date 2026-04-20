@@ -253,9 +253,10 @@
 					giova.dev
 				</a>
 			</p>
-			<!-- svelte-ignore a11y_invalid_attribute -->
 			<a
-				href="#"
+				href="https://github.com/giovacalle/quizmo"
+				target="_blank"
+				rel="noopener noreferrer"
 				class="hover:text-foreground flex items-center gap-2 transition-colors"
 				aria-label="View source on GitHub"
 			>
