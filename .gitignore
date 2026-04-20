@@ -31,3 +31,6 @@ vite.config.ts.timestamp-*
 
 # Playwright
 test-results
+
+# Local-only ops runbooks (not part of public repo)
+docs/ops/
