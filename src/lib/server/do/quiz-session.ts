@@ -605,6 +605,15 @@ export class QuizSession extends DurableObject<Env> {
 		if (meta.status === 'ended')
 			throw Object.assign(new Error('Session has ended'), { code: 'INVALID_INPUT' });
 
+		// Reject duplicate nicknames (case-insensitive, whitespace-insensitive). Raw
+		// nickname is kept for display; only normalized form is compared.
+		const normalized = normalizeNickname(nickname);
+		const existing = await this.ctx.storage.list<StoredParticipant>({ prefix: 'participant:' });
+		for (const participant of existing.values()) {
+			if (normalizeNickname(participant.nickname) === normalized)
+				throw Object.assign(new Error('Nickname already taken'), { code: 'CONFLICT' });
+		}
+
 		const participantId = crypto.randomUUID();
 		const participantToken = await this.#signToken(meta.sessionSecret, participantId);
 		const participant: StoredParticipant = {
@@ -938,6 +947,15 @@ function keyPid(key: string): string | null {
 	const parts = key.split(':');
 	if (parts.length < 3) return null;
 	return parts.slice(2).join(':');
+}
+
+/**
+ * Canonical form used for nickname uniqueness checks. The raw string is kept on
+ * the stored participant for display; dedup only cares about visual collisions,
+ * so casing and surrounding whitespace are collapsed.
+ */
+function normalizeNickname(raw: string): string {
+	return raw.trim().toLowerCase();
 }
 
 /**

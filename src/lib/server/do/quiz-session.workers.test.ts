@@ -84,3 +84,88 @@ describe('QuizSession DO — storage rehydration', () => {
 		expect(meta2?.sessionSecret).toBe(meta1?.sessionSecret);
 	});
 });
+
+describe('QuizSession DO — nickname dedup on join', () => {
+	// Minimal mock WebSocket: captures every `send(...)` so we can assert the
+	// outbound `{type:'error'|'state', ...}` messages produced by the DO's
+	// `webSocketMessage` handler. `serializeAttachment` / `deserializeAttachment`
+	// stash/retrieve the role+participantId the DO uses to tag the socket.
+	function makeMockWs() {
+		const sent: string[] = [];
+		let attachment: unknown = { role: 'participant' };
+		const ws = {
+			send(text: string) {
+				sent.push(text);
+			},
+			serializeAttachment(value: unknown) {
+				attachment = value;
+			},
+			deserializeAttachment() {
+				return attachment;
+			},
+			close() {
+				/* noop */
+			}
+		};
+		return { ws: ws as unknown as WebSocket, sent };
+	}
+
+	async function sendJoin(stub: DurableObjectStub, ws: WebSocket, nickname: string) {
+		await runInDurableObject(stub, async (instance) => {
+			// `webSocketMessage` is declared `?` on `DurableObject` — the subclass
+			// overrides it unconditionally, so narrow here.
+			if (!instance.webSocketMessage) throw new Error('DO does not implement webSocketMessage');
+			await instance.webSocketMessage(
+				ws,
+				JSON.stringify({ type: 'join', payload: { nickname } })
+			);
+		});
+	}
+
+	function lastMessage(sent: string[]): { type: string; payload: Record<string, unknown> } {
+		const last = sent.at(-1);
+		if (!last) throw new Error('no messages sent');
+		return JSON.parse(last);
+	}
+
+	it('rejects duplicate nicknames with CONFLICT (case + whitespace insensitive)', async () => {
+		const stub = stubFor(`dedup-${crypto.randomUUID()}`);
+
+		// Warm the DO so meta is seeded before any join.
+		await stub.fetch(new Request('https://do.local/internal/state'));
+
+		// 1. "Mario" → success (first to join).
+		const first = makeMockWs();
+		await sendJoin(stub, first.ws, 'Mario');
+		expect(lastMessage(first.sent).type).toBe('state');
+
+		// 2. "mario" (different case) → CONFLICT.
+		const second = makeMockWs();
+		await sendJoin(stub, second.ws, 'mario');
+		const secondMsg = lastMessage(second.sent);
+		expect(secondMsg.type).toBe('error');
+		expect(secondMsg.payload).toMatchObject({
+			code: 'CONFLICT',
+			message: 'Nickname already taken'
+		});
+
+		// 3. "  Mario  " (padded) → CONFLICT.
+		const third = makeMockWs();
+		await sendJoin(stub, third.ws, '  Mario  ');
+		const thirdMsg = lastMessage(third.sent);
+		expect(thirdMsg.type).toBe('error');
+		expect(thirdMsg.payload).toMatchObject({ code: 'CONFLICT' });
+
+		// 4. "Luigi" (different nickname) → success.
+		const fourth = makeMockWs();
+		await sendJoin(stub, fourth.ws, 'Luigi');
+		expect(lastMessage(fourth.sent).type).toBe('state');
+
+		// Storage should now hold exactly two participants — one Mario, one Luigi.
+		const participantCount = await runInDurableObject(stub, async (_instance, state) => {
+			const rows = await state.storage.list({ prefix: 'participant:' });
+			return rows.size;
+		});
+		expect(participantCount).toBe(2);
+	});
+});
