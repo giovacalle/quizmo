@@ -144,7 +144,9 @@ export function createAuthConfig(env: AuthEnv) {
 						type === 'sign-in' ? 'Your Quizmo sign-in code' : 'Your Quizmo verification code';
 					const lowered = email.trim().toLowerCase();
 					const { error } = await resend.emails.send({
-						from: env.RESEND_FROM_EMAIL,
+						// Prefix with display name so the inbox preview shows "Quizmo"
+						// instead of the bare "noreply@..." address.
+						from: `Quizmo <${env.RESEND_FROM_EMAIL}>`,
 						to: [lowered],
 						subject,
 						text: renderPlainText(otp),

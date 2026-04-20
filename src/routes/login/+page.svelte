@@ -3,59 +3,77 @@
 	import MailIcon from '@lucide/svelte/icons/mail';
 	import ShieldCheckIcon from '@lucide/svelte/icons/shield-check';
 	import { toast } from 'svelte-sonner';
+	import { fieldProxy, superForm } from 'sveltekit-superforms';
+	import { valibotClient } from 'sveltekit-superforms/adapters';
 
-	import { applyAction, enhance } from '$app/forms';
 	import * as Button from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
+	import * as Form from '$lib/components/ui/form';
 	import * as Input from '$lib/components/ui/input';
-	import * as Label from '$lib/components/ui/label';
+	import { loginWizardSchema } from '$lib/validators';
 
-	import type { ActionData, PageData } from './$types';
+	import type { LoginMessage } from './+page.server';
+	import type { PageData } from './$types';
 
-	type FormPayload =
-		| undefined
-		| null
-		| {
-				step?: 'send' | 'verify';
-				code?: string;
-				message?: string;
-				email?: string;
-		  };
-	type Props = { data: PageData; form: ActionData };
-	let { data, form }: Props = $props();
+	let { data }: { data: PageData } = $props();
 
-	// Narrow `form` to the inline-error shape we actually emit from the action.
-	// SvelteKit infers `ActionData` wide because success returns are structural;
-	// this alias keeps downstream access type-safe without `as any`.
-	const formPayload = $derived(form as FormPayload);
+	// svelte-ignore state_referenced_locally
+	const superform = superForm(data.form, {
+		validators: valibotClient(loginWizardSchema),
+		// Keep the email input on a failed step-1 submit (rate-limit, Turnstile
+		// denial) so the user doesn't re-type. v2's default preserves failure
+		// state, stated explicitly for critical flows.
+		resetForm: false,
+		onUpdated({ form }) {
+			const msg = form.message as LoginMessage | undefined;
+			if (!msg) return;
+			if (msg.kind === 'advanced') {
+				// Server advanced to step 2 via `form.data.step = 'verify'` + message().
+				// Reset the 30s resend cooldown and clear any stale Turnstile token —
+				// the widget is unmounted on step 2 and a fresh one renders on resend.
+				$codeProxy = '';
+				$turnstileTokenProxy = '';
+				turnstileWidgetId = null;
+				resendDisabledUntil = Date.now() + 30_000;
+				now = Date.now();
+				toast.success(msg.text);
+				return;
+			}
+			// kind === 'error' — toast-level form failure (rate-limit / Turnstile).
+			toast.error(msg.text);
+			// Reset Turnstile so the user can retry with a fresh challenge.
+			if ($formData.step === 'send') {
+				resetTurnstile();
+				$turnstileTokenProxy = '';
+			}
+		}
+	});
+	const { form: formData, errors, enhance, submitting, message } = superform;
 
-	// Advance to step 2 when the server reports a successful send. We read the
-	// initial form payload eagerly (SvelteKit hydrates `form` once per nav) —
-	// subsequent mutations are local state, which is what we want here so the
-	// user can flip back to step 1 without the server overriding.
-	const initialForm = (): FormPayload => form as FormPayload;
-	let step = $state<'send' | 'verify'>(initialForm()?.step === 'verify' ? 'verify' : 'send');
-	let email = $state(initialForm()?.email ?? '');
-	let otp = $state('');
+	// `code` lives only on the 'verify' branch and `turnstileToken` only on the
+	// 'send' branch of `loginWizardSchema` — superforms can't narrow a reactive
+	// store access through `{#if}` guards. `fieldProxy` exposes each branch-only
+	// field as a plain Writable<string> so bindings and callbacks stay simple.
+	const codeProxy = fieldProxy(superform, 'code');
+	const turnstileTokenProxy = fieldProxy(superform, 'turnstileToken');
 
-	let sending = $state(false);
-	let verifying = $state(false);
+	// Resend cooldown — pure UI timer, NOT form state. Stays local so the user
+	// can flip back to step 1 without the server clearing this.
 	let resendDisabledUntil = $state(0);
 	let now = $state(Date.now());
 	const resendRemainingSec = $derived(Math.max(0, Math.ceil((resendDisabledUntil - now) / 1000)));
 	const canResend = $derived(resendRemainingSec === 0);
 
 	// Turnstile widget lifecycle ------------------------------------------------
-	// The widget renders a token into a hidden input via the global `turnstile.render`
-	// callback. We lazy-load the script on first mount so the initial render stays
-	// fast. The widget re-renders on `.reset()` after a failed verify attempt.
-	let turnstileToken = $state('');
+	// Renders a token on step 1, writes it into the form via `turnstileTokenProxy`.
+	// Re-renders a fresh widget on every 'send'-step mount (including after a
+	// resend click — `turnstileWidgetId` is cleared in `requestResend`).
 	let turnstileEl = $state<HTMLDivElement | null>(null);
 	let turnstileWidgetId: string | null = null;
 
 	$effect(() => {
-		// Drive the live-countdown display without needing setInterval inside the
-		// `disabled` check — `$effect` re-evaluates when `now` changes.
+		// Tick the countdown only while a cooldown is active. Without this gate
+		// the effect would re-schedule forever.
 		if (resendDisabledUntil === 0 || now >= resendDisabledUntil) return;
 		const t = setTimeout(() => {
 			now = Date.now();
@@ -64,8 +82,11 @@
 	});
 
 	$effect(() => {
+		// Mount the widget on step 1 only. Re-runs when $formData.step flips back
+		// to 'send' via the resend flow, which resets turnstileWidgetId in
+		// `requestResend` so the render branch fires again.
 		if (typeof window === 'undefined') return;
-		if (step !== 'send') return;
+		if ($formData.step !== 'send') return;
 		if (!data.turnstileSiteKey) return;
 
 		const render = () => {
@@ -76,13 +97,13 @@
 				sitekey: data.turnstileSiteKey,
 				theme: 'auto',
 				callback: (token) => {
-					turnstileToken = token;
+					$turnstileTokenProxy = token;
 				},
 				'expired-callback': () => {
-					turnstileToken = '';
+					$turnstileTokenProxy = '';
 				},
 				'error-callback': () => {
-					turnstileToken = '';
+					$turnstileTokenProxy = '';
 				}
 			});
 		};
@@ -101,68 +122,45 @@
 		document.head.appendChild(script);
 	});
 
-	// -------------------------------------------------------------------------
-	// Form action wiring. `use:enhance` preserves progressive enhancement; the
-	// submit-handler captures loading state and the onresult callback drives the
-	// step advance + toast-on-failure.
-	// -------------------------------------------------------------------------
-
-	function sendOtpEnhance() {
-		sending = true;
-		return async ({ result, update }: { result: SubmitResult; update: () => Promise<void> }) => {
-			sending = false;
-			await update();
-			if (result.type === 'success' || result.type === 'redirect') {
-				step = 'verify';
-				otp = '';
-				resendDisabledUntil = Date.now() + 30_000;
-				now = Date.now();
-				toast.success('Code sent. Check your email.');
-				return;
-			}
-			if (result.type === 'failure') {
-				const msg = typeof result.data?.message === 'string' ? result.data.message : null;
-				if (msg) toast.error(msg);
-				// Turnstile binds the token to the submitting request only; reset the
-				// widget so the user can retry.
-				resetTurnstile();
-				turnstileToken = '';
-			}
-			await applyAction(result);
+	$effect(() => {
+		// Clean up the Turnstile widget when the component unmounts — prevents
+		// orphan script handlers if the user navigates away mid-challenge.
+		return () => {
+			const ts = (window as unknown as { turnstile?: TurnstileApi } | undefined)?.turnstile;
+			if (ts && turnstileWidgetId !== null) ts.remove?.(turnstileWidgetId);
 		};
-	}
-
-	function verifyOtpEnhance() {
-		verifying = true;
-		return async ({ result, update }: { result: SubmitResult; update: () => Promise<void> }) => {
-			verifying = false;
-			if (result.type === 'redirect') {
-				await applyAction(result);
-				return;
-			}
-			await update();
-			if (result.type === 'failure') {
-				const msg = typeof result.data?.message === 'string' ? result.data.message : null;
-				if (msg) toast.error(msg);
-			}
-			await applyAction(result);
-		};
-	}
+	});
 
 	function resetTurnstile() {
 		const ts = (window as unknown as { turnstile?: TurnstileApi }).turnstile;
 		if (ts && turnstileWidgetId !== null) ts.reset(turnstileWidgetId);
 	}
 
-	function backToEmail() {
-		step = 'send';
-		otp = '';
-		turnstileToken = '';
+	// Tear the widget down via the Turnstile API so Svelte's DOM ownership stays
+	// consistent. The render `$effect` remounts a fresh challenge on the next
+	// 'send'-step pass because `turnstileWidgetId` is back to null.
+	function removeTurnstile() {
+		const ts = (window as unknown as { turnstile?: TurnstileApi }).turnstile;
+		if (ts && turnstileWidgetId !== null) ts.remove?.(turnstileWidgetId);
 		turnstileWidgetId = null;
 	}
 
-	// Minimal typing for the Turnstile global. Full types would pull in an extra
-	// dev dep for no meaningful payoff on a single page.
+	// Flip back to step 1 and reset the widget so the user can request a fresh
+	// code. Does NOT auto-submit — the user clicks "Send code" again after the
+	// challenge resolves. Whole-object assignment widens the union to the 'send'
+	// branch so branch-specific fields (turnstileToken) are typed.
+	function requestResend() {
+		if (!canResend) return;
+		$formData = { step: 'send', email: $formData.email, turnstileToken: '' };
+		removeTurnstile();
+	}
+
+	// "Use a different email" — clear the form entirely and return to step 1.
+	function useDifferentEmail() {
+		$formData = { step: 'send', email: '', turnstileToken: '' };
+		removeTurnstile();
+	}
+
 	type TurnstileApi = {
 		render: (
 			el: HTMLElement,
@@ -175,13 +173,8 @@
 			}
 		) => string;
 		reset: (widgetId?: string) => void;
+		remove?: (widgetId?: string) => void;
 	};
-
-	type SubmitResult =
-		| { type: 'success'; status: number; data?: Record<string, unknown> }
-		| { type: 'failure'; status: number; data?: Record<string, unknown> }
-		| { type: 'redirect'; status: number; location: string }
-		| { type: 'error'; status?: number; error: unknown };
 </script>
 
 <svelte:head>
@@ -192,7 +185,7 @@
 	<Card.Root class="w-full max-w-sm">
 		<Card.Header>
 			<Card.Title class="flex items-center gap-2 text-xl">
-				{#if step === 'send'}
+				{#if $formData.step === 'send'}
 					<MailIcon class="text-primary size-5" aria-hidden="true" />
 					Sign in to Quizmo
 				{:else}
@@ -201,31 +194,44 @@
 				{/if}
 			</Card.Title>
 			<Card.Description>
-				{#if step === 'send'}
+				{#if $formData.step === 'send'}
 					Enter your email and we'll send you a one-time code.
 				{:else}
-					We sent a 6-digit code to <span class="text-foreground font-medium">{email}</span>.
+					We sent a 6-digit code to <span class="text-foreground font-medium"
+						>{$formData.email}</span
+					>.
 				{/if}
 			</Card.Description>
 		</Card.Header>
 
-		{#if step === 'send'}
-			<form method="POST" action="?/sendOtp" use:enhance={sendOtpEnhance}>
-				<Card.Content class="space-y-4">
-					<div class="space-y-2">
-						<Label.Root for="email">Email</Label.Root>
-						<Input.Root
-							id="email"
-							name="email"
-							type="email"
-							autocomplete="email"
-							required
-							placeholder="you@example.com"
-							bind:value={email}
-						/>
-					</div>
+		<form method="POST" use:enhance>
+			<!-- Variant discriminant: has to ride as a form field so the server
+			     parser picks the right branch of loginWizardSchema. -->
+			<input type="hidden" name="step" value={$formData.step} />
 
-					<input type="hidden" name="turnstileToken" value={turnstileToken} />
+			{#if $formData.step === 'send'}
+				<Card.Content class="space-y-4">
+					<Form.Field form={superform} name="email">
+						<Form.Control>
+							{#snippet children({ props })}
+								<Form.Label>Email</Form.Label>
+								<Input.Root
+									{...props}
+									type="email"
+									autocomplete="email"
+									placeholder="you@example.com"
+									bind:value={$formData.email}
+								/>
+							{/snippet}
+						</Form.Control>
+						<Form.FieldErrors />
+					</Form.Field>
+
+					<!-- Turnstile token is a schema field (`minLength(1)` on the 'send'
+					     branch). `$turnstileTokenProxy` is the Writable face of
+					     `$formData.turnstileToken` — the widget callback writes it and
+					     valibotClient sees it during client-side validation. -->
+					<input type="hidden" name="turnstileToken" value={$turnstileTokenProxy} />
 
 					{#if data.turnstileSiteKey}
 						<div class="flex justify-center">
@@ -237,72 +243,74 @@
 						</p>
 					{/if}
 
-					{#if formPayload?.step === 'send' && formPayload?.message}
-						<p class="text-destructive text-sm" role="alert">{formPayload.message}</p>
+					{#if $errors.turnstileToken}
+						<p class="text-destructive text-sm" role="alert">{$errors.turnstileToken[0]}</p>
 					{/if}
 				</Card.Content>
 				<Card.Footer class="flex flex-col gap-2">
-					<Button.Root
-						type="submit"
+					<Form.Button
 						class="w-full"
-						aria-disabled={sending ||
-							email.trim().length === 0 ||
-							(!!data.turnstileSiteKey && turnstileToken.length === 0)}
+						aria-disabled={$submitting ||
+							$formData.email.trim().length === 0 ||
+							(!!data.turnstileSiteKey && $turnstileTokenProxy.length === 0)}
 						onclick={(e) => {
 							if (
-								sending ||
-								email.trim().length === 0 ||
-								(!!data.turnstileSiteKey && turnstileToken.length === 0)
+								$submitting ||
+								$formData.email.trim().length === 0 ||
+								(!!data.turnstileSiteKey && $turnstileTokenProxy.length === 0)
 							) {
 								e.preventDefault();
 							}
 						}}
 					>
-						{#if sending}
+						{#if $submitting}
 							<Loader2Icon class="mr-2 size-4 animate-spin" aria-hidden="true" />
 						{/if}
 						Send code
-					</Button.Root>
+					</Form.Button>
 				</Card.Footer>
-			</form>
-		{:else}
-			<form method="POST" action="?/verifyOtp" use:enhance={verifyOtpEnhance}>
+			{:else}
 				<Card.Content class="space-y-4">
-					<input type="hidden" name="email" value={email} />
-					<div class="space-y-2">
-						<Label.Root for="otp">6-digit code</Label.Root>
-						<Input.Root
-							id="otp"
-							name="otp"
-							type="text"
-							inputmode="numeric"
-							autocomplete="one-time-code"
-							maxlength={6}
-							required
-							placeholder="123456"
-							class="text-center text-2xl tracking-[0.4em]"
-							bind:value={otp}
-						/>
-					</div>
+					<!-- Email echo: variant schema requires it on step 2 too, and it's
+					     not editable here — just a hidden input + visible text. -->
+					<input type="hidden" name="email" value={$formData.email} />
 
-					{#if formPayload?.step === 'verify' && formPayload?.message}
-						<p class="text-destructive text-sm" role="alert">{formPayload.message}</p>
+					<Form.Field form={superform} name="code">
+						<Form.Control>
+							{#snippet children({ props })}
+								<Form.Label>6-digit code</Form.Label>
+								<Input.Root
+									{...props}
+									type="text"
+									inputmode="numeric"
+									autocomplete="one-time-code"
+									maxlength={6}
+									placeholder="123456"
+									class="text-center text-2xl tracking-[0.4em]"
+									bind:value={$codeProxy}
+								/>
+							{/snippet}
+						</Form.Control>
+						<Form.FieldErrors />
+					</Form.Field>
+
+					{#if $message?.kind === 'error'}
+						<p class="text-destructive text-sm" role="alert">{$message.text}</p>
 					{/if}
 				</Card.Content>
 				<Card.Footer class="flex flex-col gap-3">
-					<Button.Root
-						type="submit"
+					<Form.Button
 						class="w-full"
-						aria-disabled={verifying || otp.length !== 6}
+						aria-disabled={$submitting || $codeProxy.length !== 6}
 						onclick={(e) => {
-							if (verifying || otp.length !== 6) e.preventDefault();
+							if ($submitting || $codeProxy.length !== 6) e.preventDefault();
 						}}
 					>
-						{#if verifying}
+						{#if $submitting}
 							<Loader2Icon class="mr-2 size-4 animate-spin" aria-hidden="true" />
 						{/if}
 						Verify code
-					</Button.Root>
+					</Form.Button>
 
 					<div class="text-muted-foreground flex w-full items-center justify-between text-xs">
 						<Button.Root
@@ -310,7 +318,7 @@
 							variant="link"
 							size="sm"
 							class="h-auto px-0 text-xs"
-							onclick={backToEmail}
+							onclick={useDifferentEmail}
 						>
 							Use a different email
 						</Button.Root>
@@ -321,7 +329,7 @@
 								variant="link"
 								size="sm"
 								class="h-auto px-0 text-xs"
-								onclick={backToEmail}
+								onclick={requestResend}
 							>
 								Resend code
 							</Button.Root>
@@ -330,7 +338,7 @@
 						{/if}
 					</div>
 				</Card.Footer>
-			</form>
-		{/if}
+			{/if}
+		</form>
 	</Card.Root>
 </main>

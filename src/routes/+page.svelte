@@ -7,6 +7,7 @@
 	import ZapIcon from '@lucide/svelte/icons/zap';
 	import { fly } from 'svelte/transition';
 
+	import { Badge } from '$lib/components/ui/badge';
 	import * as Button from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 
@@ -115,11 +116,7 @@
 							class="border-border bg-muted/40 flex items-center justify-between rounded-lg border px-3 py-2"
 						>
 							<span class="text-sm font-medium">Mercury</span>
-							<span
-								class="bg-success/10 text-success-foreground border-success/30 rounded-md border px-2 py-0.5 text-xs font-semibold"
-							>
-								Correct
-							</span>
+							<Badge variant="success">Correct</Badge>
 						</div>
 						<div class="border-border bg-background rounded-lg border px-3 py-2 text-sm">Venus</div>
 						<div class="border-border bg-background rounded-lg border px-3 py-2 text-sm">Earth</div>
@@ -218,7 +215,17 @@
 		<div
 			class="text-muted-foreground mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 text-sm sm:flex-row"
 		>
-			<p>Made with care by <span class="text-foreground font-medium">Giovanni Callegari</span></p>
+			<p>
+				Made with <span aria-hidden="true">❤️</span><span class="sr-only">love</span> by
+				<a
+					href="https://giova.dev"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="text-foreground hover:text-primary font-medium transition-colors"
+				>
+					giova.dev
+				</a>
+			</p>
 			<!-- svelte-ignore a11y_invalid_attribute -->
 			<a
 				href="#"

@@ -23,7 +23,7 @@
 </svelte:head>
 
 <ModeWatcher />
-<Toaster richColors position="bottom-right" />
+<Toaster richColors position="top-center" />
 
 <div class="fixed top-4 right-4 z-50">
 	<ModeToggle />
