@@ -78,6 +78,35 @@
 	<meta property="og:image:height" content="630" />
 	<meta property="og:image:alt" content="Quizmo — Host live quizzes in seconds" />
 	<meta name="twitter:image" content="https://quizmo.giova.dev/og-image.svg" />
+	<!-- eslint-disable svelte/no-at-html-tags -- JSON-LD is trusted static content -->
+	{@html `<script type="application/ld+json">${JSON.stringify({
+		'@context': 'https://schema.org',
+		'@type': 'SoftwareApplication',
+		name: 'Quizmo',
+		description: 'Host live quizzes in seconds. Create a quiz, share the code, play live together.',
+		url: 'https://quizmo.giova.dev/',
+		applicationCategory: 'GameApplication',
+		applicationSubCategory: 'Quiz',
+		operatingSystem: 'Web',
+		browserRequirements: 'Requires JavaScript and a modern browser with WebSocket support.',
+		offers: {
+			'@type': 'Offer',
+			price: '0',
+			priceCurrency: 'USD'
+		},
+		featureList: [
+			'Live multiplayer quizzes',
+			'Six-character join codes',
+			'Mobile-friendly participant view',
+			'Real-time leaderboard',
+			'Instant feedback after each question'
+		],
+		author: {
+			'@type': 'Person',
+			name: 'Giovanni Callegari',
+			url: 'https://giova.dev'
+		}
+	})}</script>`}
 </svelte:head>
 
 <main class="bg-background text-foreground min-h-dvh">

@@ -1,3 +1,12 @@
-# allow crawling everything by default
+# Quizmo robots
+
 User-agent: *
-Disallow:
+Allow: /
+Allow: /login
+Allow: /join
+Disallow: /dashboard
+Disallow: /host
+Disallow: /play
+Disallow: /api/
+
+Sitemap: https://quizmo.giova.dev/sitemap.xml
