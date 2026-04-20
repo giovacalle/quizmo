@@ -1,0 +1,43 @@
+{
+	"format_on_save": "on",
+	"formatter": "prettier",
+	"tab_size": 2,
+	"ensure_final_newline_on_save": true,
+	"remove_trailing_whitespace_on_save": true,
+	"languages": {
+		"Svelte": {
+			"tab_size": 2,
+			"formatter": "prettier"
+		},
+		"TypeScript": {
+			"tab_size": 2,
+			"formatter": "prettier"
+		},
+		"JavaScript": {
+			"tab_size": 2,
+			"formatter": "prettier"
+		},
+		"JSON": {
+			"tab_size": 2,
+			"formatter": "prettier"
+		},
+		"JSONC": {
+			"tab_size": 2,
+			"formatter": "prettier"
+		}
+	},
+	"lsp": {
+		"svelte-language-server": {
+			"settings": {
+				"svelte": {
+					"plugin": {
+						"typescript": { "enable": true, "diagnostics": { "enable": true } },
+						"svelte": { "enable": true, "diagnostics": { "enable": true } },
+						"css": { "enable": true },
+						"html": { "enable": true }
+					}
+				}
+			}
+		}
+	}
+}
