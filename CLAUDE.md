@@ -64,3 +64,16 @@ Detailed rules auto-load from `.claude/rules/`:
 - No i18n (EN only)
 - No shared dev/prod split — single D1 `quizmo-db`, demo context
 - No "Built with…" tech badges in user-facing copy (see `feedback_landing_copy_product_first` memory)
+
+## ⚠️ Easy mistakes
+
+Read before changing core paths.
+
+- **No Node.js primitives on Worker code paths**: no `fs`, `path`, `child_process`, `node:crypto`, `process.env`. Use `platform.env` (SvelteKit context) or `env` (DO / `scheduled()` context). For hashing/random use `crypto.subtle` / `crypto.getRandomValues`.
+- **Bind through `$formData.x.y`, never via a local alias.** `const q = $formData.questions[i]; q.text = ...` silently skips superforms re-validation. Always assign through the store path.
+- **Storage write-through in Durable Objects**: in-memory `Map` is cache only. Every mutation must `await ctx.storage.put(...)` BEFORE broadcasting or returning.
+- **`@internationalized/date` is the SOLE date library.** Months are 1-based (vs JS `Date`'s 0-based). Convert at the boundary.
+- **Server errors via `throwAppError(code, msg)`**, never raw `new Error(...)`. Single-line if + throw, no braces.
+- **`as any` is forbidden.** TS strict + `noUnusedLocals` + `noUncheckedIndexedAccess` is on.
+- **`wrangler types` after every `wrangler.jsonc` edit.** Don't hand-write `Env` — it drifts.
+- **WebSockets via `ctx.acceptWebSocket()`**, never `server.accept()` — the latter breaks DO hibernation.
