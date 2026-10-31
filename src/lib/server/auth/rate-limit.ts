@@ -2,7 +2,7 @@ import { throwAppError } from '$lib/server/errors';
 
 /**
  * KV-backed rate limiter for the auth surface. Key prefixes are mandated by
- * `.claude/rules/cf-workers-backend.md`:
+ * `docs/agents/cf-workers-backend.md`:
  *
  *   rl:email:send:{emailHash}  - 3 per email per hour
  *   rl:ip:send:{ip}            - 20 per IP per hour

@@ -3,7 +3,7 @@
  *
  * Better-auth writes session rows and verification records (email-OTP codes) here,
  * plus its own rate-limit counters. All keys live under `QUIZMO_AUTH_KV` with the
- * project-mandated prefixes documented in `.claude/rules/cf-workers-backend.md`:
+ * project-mandated prefixes documented in `docs/agents/cf-workers-backend.md`:
  *
  *   session:{token}   - better-auth session payload
  *   otp:{identifier}  - email-OTP verification record
