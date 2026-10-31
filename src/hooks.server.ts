@@ -1,5 +1,4 @@
 import type { Handle, HandleServerError } from '@sveltejs/kit';
-import { svelteKitHandler } from 'better-auth/svelte-kit';
 
 import { building } from '$app/environment';
 import { createAuth } from '$lib/server/auth';
@@ -12,10 +11,11 @@ import { isAppError } from '$lib/server/errors';
  *   2. Resolve the current session + user via `auth.api.getSession` and expose
  *      `event.locals.user` to load/action functions + `+layout.server.ts` so the
  *      authenticated user id is available everywhere without re-parsing cookies.
- *   3. Hand off to `svelteKitHandler`, which forwards any `/api/auth/*` request
- *      to better-auth's own router AND attaches any Set-Cookie headers emitted
- *      by server actions (sign-in, verify-OTP, sign-out) to the outgoing
- *      Response.
+ *   3. Resolve normally. better-auth's HTTP router (`/api/auth/*`) is NOT
+ *      mounted: every auth call goes through server actions (`locals.auth.api.*`)
+ *      so Turnstile and the `/login` rate limits cannot be skipped by POSTing to
+ *      better-auth directly. Set-Cookie headers from those actions are attached
+ *      by the `sveltekitCookies` plugin (see auth/config.ts).
  *
  * During `vite build` the module is evaluated without a real `platform`. The
  * `building` guard short-circuits so static-analysis passes without a binding
@@ -38,7 +38,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 			}
 		: null;
 
-	return svelteKitHandler({ event, resolve, auth, building });
+	return resolve(event);
 };
 
 /**

@@ -84,7 +84,6 @@ src/
 │   │   │       └── [sessionId]/
 │   │   └── _components/quiz-form.svelte
 │   └── api/
-│       ├── auth/[...all]/       # better-auth
 │       └── session/[sessionId]/ws/  # WS → DO forwarder
 └── lib/
     ├── components/
