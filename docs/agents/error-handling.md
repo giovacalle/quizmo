@@ -66,7 +66,7 @@ Centralized in `httpStatusFor`:
 | `FORBIDDEN`       | 403  | Authenticated, not authorized                           |
 | `INVALID_INPUT`   | 400  | Validation failed (Valibot `safeParse` error, bad form) |
 | `CONFLICT`        | 409  | Unique violation, duplicate resource                    |
-| `INTERNAL_ERROR`  | 500  | Unexpected (DB failure, Resend outage, third-party)     |
+| `INTERNAL_ERROR`  | 500  | Unexpected (DB failure, email send, third-party)        |
 
 ### `guardAppError` — route-level conversion
 

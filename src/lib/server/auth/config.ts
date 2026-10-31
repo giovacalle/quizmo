@@ -3,14 +3,13 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { emailOTP } from 'better-auth/plugins';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { drizzle } from 'drizzle-orm/d1';
-import { Resend } from 'resend';
 
 import { getRequestEvent } from '$app/server';
 import { db } from '$lib/server/db/client';
 import { users as domainUsers } from '$lib/server/db/schema';
-import { AppError } from '$lib/server/errors';
 
 import { createKVSecondaryStorage } from './kv-storage';
+import { sendOtpEmail } from './otp-email';
 import { authUsers } from './schema';
 
 /**
@@ -21,8 +20,8 @@ export type AuthEnv = {
 	DB: D1Database;
 	AUTH_KV: KVNamespace;
 	BETTER_AUTH_SECRET: string;
-	RESEND_API_KEY: string;
-	RESEND_FROM_EMAIL: string;
+	EMAIL: SendEmail;
+	EMAIL_FROM: string;
 	APP_URL: string;
 };
 
@@ -52,7 +51,6 @@ export function createAuthConfig(env: AuthEnv) {
 	// domain-users mirror insert.
 	const authClient = drizzle(env.DB, { schema: { authUsers } });
 	const client = db(env.DB);
-	const resend = new Resend(env.RESEND_API_KEY);
 
 	return betterAuth({
 		secret: env.BETTER_AUTH_SECRET,
@@ -136,28 +134,8 @@ export function createAuthConfig(env: AuthEnv) {
 				// "invalidate-on-resend" requirement.
 				resendStrategy: 'rotate',
 				// Redundant with our schema-level COLLATE check, but cheap guarantee.
-				async sendVerificationOTP({ email, otp, type }) {
-					// Only the "sign-in" flow is wired. If a plugin emits a different
-					// type (email-verification / forget-password), we still send the
-					// code but keep the subject generic.
-					const subject =
-						type === 'sign-in' ? 'Your Quizmo sign-in code' : 'Your Quizmo verification code';
-					const lowered = email.trim().toLowerCase();
-					const { error } = await resend.emails.send({
-						// Prefix with display name so the inbox preview shows "Quizmo"
-						// instead of the bare "noreply@..." address.
-						from: `Quizmo <${env.RESEND_FROM_EMAIL}>`,
-						to: [lowered],
-						subject,
-						text: renderPlainText(otp),
-						html: renderHtml(otp)
-					});
-					if (error) {
-						// Preserve the Resend message in the AppError for ops visibility;
-						// the client just sees "Could not send code".
-						console.error('[resend-error]', error);
-						throw new AppError('INTERNAL_ERROR', 'Could not send code');
-					}
+				async sendVerificationOTP(payload) {
+					await sendOtpEmail(env.EMAIL, env.EMAIL_FROM, payload);
 				}
 			}),
 			// Must be last — reads from `$app/server`'s getRequestEvent and attaches
@@ -169,34 +147,3 @@ export function createAuthConfig(env: AuthEnv) {
 }
 
 export type AuthInstance = ReturnType<typeof createAuthConfig>;
-
-function renderPlainText(otp: string): string {
-	return [
-		'Your Quizmo sign-in code:',
-		'',
-		otp,
-		'',
-		'This code expires in 10 minutes and can only be used once.',
-		'If you did not request this code, you can safely ignore this email.'
-	].join('\n');
-}
-
-function renderHtml(otp: string): string {
-	// Inline styles only — email clients strip <style> blocks unpredictably. Tokens
-	// kept simple (neutral grays + indigo accent) so it renders across clients.
-	return `<!doctype html>
-<html>
-	<body style="font-family: ui-sans-serif, system-ui, sans-serif; background: #f3f4f6; margin: 0; padding: 24px;">
-		<table role="presentation" cellpadding="0" cellspacing="0" style="max-width: 480px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 32px; border: 1px solid #e5e7eb;">
-			<tr>
-				<td>
-					<h1 style="margin: 0 0 12px; font-size: 20px; color: #111827;">Your Quizmo sign-in code</h1>
-					<p style="margin: 0 0 24px; color: #4b5563; line-height: 1.5;">Paste this code on the sign-in page. It expires in 10 minutes and can only be used once.</p>
-					<div style="font-size: 28px; font-weight: 700; letter-spacing: 0.25em; color: #4f46e5; padding: 16px 0; text-align: center; background: #eef2ff; border-radius: 8px;">${otp}</div>
-					<p style="margin: 24px 0 0; color: #6b7280; font-size: 12px;">If you did not request this code, you can safely ignore this email.</p>
-				</td>
-			</tr>
-		</table>
-	</body>
-</html>`;
-}

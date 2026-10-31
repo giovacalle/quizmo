@@ -24,8 +24,8 @@ export function readAuthEnv(platformEnv: App.Platform['env']): AuthEnv {
 		QUIZMO_DB: D1Database;
 		QUIZMO_AUTH_KV: KVNamespace;
 		BETTER_AUTH_SECRET?: string;
-		RESEND_API_KEY?: string;
-		RESEND_FROM_EMAIL?: string;
+		EMAIL: SendEmail;
+		EMAIL_FROM?: string;
 		APP_URL?: string;
 	};
 
@@ -36,11 +36,10 @@ export function readAuthEnv(platformEnv: App.Platform['env']): AuthEnv {
 		DB: raw.QUIZMO_DB,
 		AUTH_KV: raw.QUIZMO_AUTH_KV,
 		BETTER_AUTH_SECRET: raw.BETTER_AUTH_SECRET,
-		// Resend is only needed for sendOTP. If absent, the plugin callback throws
-		// at send-time — which surfaces as an AppError('INTERNAL_ERROR', 'Could not
-		// send code') in the /login action.
-		RESEND_API_KEY: raw.RESEND_API_KEY ?? '',
-		RESEND_FROM_EMAIL: raw.RESEND_FROM_EMAIL ?? '',
+		// Only needed for sendOTP. A send failure surfaces as an
+		// AppError('INTERNAL_ERROR', 'Could not send code') in the /login action.
+		EMAIL: raw.EMAIL,
+		EMAIL_FROM: raw.EMAIL_FROM ?? '',
 		APP_URL: raw.APP_URL ?? 'http://localhost:5173'
 	};
 }
