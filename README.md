@@ -33,7 +33,7 @@ Email-only auth (OTP, no passwords). Sessions persist to D1 so results survive c
 
 | Layer      | Choice                                                                                            | Why                                                                                        |
 | ---------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Runtime    | Cloudflare Workers (`@sveltejs/adapter-cloudflare`) — Workers, not Pages                          | Edge-native, DO support, free tier covers the target scale.                                |
+| Runtime    | Cloudflare Workers (`@sveltejs/adapter-cloudflare`) — Workers, not Pages                          | Edge-native, DO support. Workers Paid (required by Email Sending) covers the target scale. |
 | Framework  | SvelteKit 2 + Svelte 5 (runes only)                                                               | SSR + SPA hybrid, progressive enhancement, small runtime.                                  |
 | State      | Durable Object `QuizSession` with SQLite storage, WebSocket hibernation, alarms                   | Textbook DO fan-out (1 host → N participants). Hibernation keeps idle cost at zero.        |
 | Database   | D1 via Drizzle ORM, `drizzle-valibot` for auto-derived schemas + hand-written refinements         | Single source of truth: `schema.ts` → TS types + runtime validators + migrations.          |
