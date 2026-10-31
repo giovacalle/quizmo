@@ -1,9 +1,6 @@
 # Local dev secrets template — copy to `.dev.vars` (which is gitignored).
 # Production values are set via `wrangler secret put <NAME>` and NEVER land in this repo.
 
-# Resend API key — dashboard → https://resend.com/api-keys
-RESEND_API_KEY=
-
 # Better-auth signing secret. Generate ONCE via:
 #   openssl rand -base64 32
 # Store a copy in the user's password manager. Rotating invalidates all active sessions.

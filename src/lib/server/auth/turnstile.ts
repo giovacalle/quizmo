@@ -3,9 +3,9 @@ import { ResultAsync } from 'neverthrow';
 import { AppError } from '$lib/server/errors';
 
 /**
- * Server-side Turnstile verifier. Called before any rate-limit check or Resend call
+ * Server-side Turnstile verifier. Called before any rate-limit check or email send
  * in the `/login` sendOtp action, so a DOM-stripped form submission gets rejected
- * without touching Resend.
+ * without sending email.
  *
  * Returns a `Result<{success: true}, AppError>` — callers use `.match` or `.isErr`
  * to surface the AppError via `guardAppError` / form action failure. See

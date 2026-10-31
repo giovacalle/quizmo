@@ -57,7 +57,7 @@ export const actions: Actions = {
 			const { email, turnstileToken } = form.data;
 
 			// Turnstile FIRST — so a scripted request without a token never touches
-			// Resend or the rate-limit counters. Rate-limit is a fallback layer.
+			// the email binding or the rate-limit counters. Rate-limit is a fallback layer.
 			const turnstileSecret =
 				(platform?.env as unknown as { TURNSTILE_SECRET_KEY?: string })?.TURNSTILE_SECRET_KEY ?? '';
 			const turnstileResult = await verifyTurnstile(turnstileSecret, turnstileToken, ip);
@@ -72,7 +72,7 @@ export const actions: Actions = {
 				await enforceRateLimit(kv, 'send-email', emailKey);
 				await enforceRateLimit(kv, 'send-ip', ip);
 				// better-auth's API takes the raw Headers — the plugin emits the email
-				// via Resend inside `sendVerificationOTP` (see auth/config.ts).
+				// via the EMAIL binding inside `sendVerificationOTP` (see auth/config.ts).
 				await locals.auth.api.sendVerificationOTP({
 					body: { email, type: 'sign-in' },
 					headers: request.headers

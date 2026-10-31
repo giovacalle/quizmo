@@ -38,7 +38,7 @@ Email-only auth (OTP, no passwords). Sessions persist to D1 so results survive c
 | State      | Durable Object `QuizSession` with SQLite storage, WebSocket hibernation, alarms                   | Textbook DO fan-out (1 host → N participants). Hibernation keeps idle cost at zero.        |
 | Database   | D1 via Drizzle ORM, `drizzle-valibot` for auto-derived schemas + hand-written refinements         | Single source of truth: `schema.ts` → TS types + runtime validators + migrations.          |
 | Cache      | Two KV namespaces (`auth` + `quiz`) with mandatory key prefixes, 1-hour TTL on lookups            | Isolates blast radius of auth-side eviction pressure from quiz runtime.                    |
-| Auth       | `better-auth` email-OTP plugin + Resend for delivery                                              | No passwords, no OAuth dependencies, 6-digit code, single-use + invalidate-on-resend.      |
+| Auth       | `better-auth` email-OTP plugin + Cloudflare Email Sending for delivery                            | No passwords, no OAuth dependencies, 6-digit code, single-use + invalidate-on-resend.      |
 | Validation | Valibot schemas shared server/client                                                              | Smaller bundle than Zod, same ergonomics.                                                  |
 | UI         | `shadcn-svelte` namespace primitives, Tailwind v4 via `@tailwindcss/vite`, `@lucide/svelte` icons | Own the code, not the library. Semantic CSS-var tokens — zero hardcoded colors in the app. |
 | Forms      | SvelteKit form actions + `use:enhance`                                                            | Progressive enhancement free, server is source of truth.                                   |
@@ -59,7 +59,7 @@ A few details worth flagging for anyone reading the code:
 - **Cron via `scheduled()`, not HTTP**: the nightly cleanup + session reconciliation is a real Worker `scheduled` export, not a publicly reachable `/api/cron/*` endpoint. No spoofable `cf-worker` header guard.
 - **DO + `scheduled` into a single bundle**: `@sveltejs/adapter-cloudflare` emits only `export default { fetch }` on the worker entry — there's no adapter hook to inject additional named exports, and Cloudflare Workers requires both `QuizSession` (the DO class) and `scheduled` (the cron handler) as named exports alongside the default. `scripts/inject-do-exports.mjs` bridges the gap: a post-build step that esbuild-compiles both modules through a single synthetic virtual entry (not two separate passes — that deduplicates shared Drizzle / Valibot symbols so wrangler doesn't reject the deploy with `The symbol 'drizzle' has already been declared`), renames the top-level identifiers to avoid colliding with the re-export names, and appends the bundle + a trailing `export { QuizSession, scheduled }` to `.svelte-kit/cloudflare/_worker.js`. See the header comment in `scripts/inject-do-exports.mjs` for the full rationale.
 
-More detail in the design + implementation rules under [`.claude/rules/`](./.claude/rules/).
+More detail in the design + implementation rules under [`docs/agents/`](./docs/agents/).
 
 ## Project layout
 
@@ -92,7 +92,7 @@ src/
     │   ├── leaderboard.svelte
     │   └── mode-toggle.svelte
     ├── server/
-    │   ├── auth/                # better-auth config, Resend, rate limits, Turnstile
+    │   ├── auth/                # better-auth config, OTP email, rate limits, Turnstile
     │   ├── cron/                # scheduled() handler + cleanup/reconcile
     │   ├── db/                  # Drizzle schema, client, validators
     │   ├── do/                  # QuizSession DO + WS protocol + scoring
@@ -118,19 +118,18 @@ wrangler deploy
 
 Secrets needed for a full end-to-end run:
 
-- `RESEND_API_KEY` — for OTP email delivery
 - `BETTER_AUTH_SECRET` — session signing (generate once via `openssl rand -base64 32`)
 - `TURNSTILE_SECRET_KEY` — server-side Turnstile verification
 
-Plus the public vars in `wrangler.jsonc`: `TURNSTILE_SITE_KEY`, `APP_URL`, `RESEND_FROM_EMAIL`.
+Plus the public vars in `wrangler.jsonc`: `TURNSTILE_SITE_KEY`, `APP_URL`, `EMAIL_FROM`, and the `EMAIL` send binding (Cloudflare Email Sending, needs Workers Paid and `emails.giova.dev` onboarded as a sending domain).
 
 ## Conventions
 
-Detailed rules auto-load from [`.claude/rules/`](./.claude/rules/) for any AI coding agent:
+Agent instructions live in [`AGENTS.md`](./AGENTS.md), which points to the detailed rules in [`docs/agents/`](./docs/agents/):
 
-- [`error-handling.md`](./.claude/rules/error-handling.md) — server throws `AppError`, client uses neverthrow, no `try/catch` for flow control
-- [`sveltekit-frontend.md`](./.claude/rules/sveltekit-frontend.md) — Svelte 5 runes, CF compat, Drizzle inferred types
-- [`ui-components.md`](./.claude/rules/ui-components.md) + [`ui-checklist.md`](./.claude/rules/ui-checklist.md) — shadcn-svelte primitives only, semantic tokens, namespace imports
-- [`forms.md`](./.claude/rules/forms.md) — SvelteKit actions + `use:enhance` + Valibot
-- [`dates.md`](./.claude/rules/dates.md) — `@internationalized/date` is the only date library
-- [`cf-workers-backend.md`](./.claude/rules/cf-workers-backend.md) — bindings map, D1/KV/DO patterns, storage write-through, WS protocol
+- [`error-handling.md`](./docs/agents/error-handling.md) — server throws `AppError`, client uses neverthrow, no `try/catch` for flow control
+- [`sveltekit-frontend.md`](./docs/agents/sveltekit-frontend.md) — Svelte 5 runes, CF compat, Drizzle inferred types
+- [`ui-components.md`](./docs/agents/ui-components.md) + [`ui-checklist.md`](./docs/agents/ui-checklist.md) — shadcn-svelte primitives only, semantic tokens, namespace imports
+- [`forms.md`](./docs/agents/forms.md) — SvelteKit actions + `use:enhance` + Valibot
+- [`dates.md`](./docs/agents/dates.md) — `@internationalized/date` is the only date library
+- [`cf-workers-backend.md`](./docs/agents/cf-workers-backend.md) — bindings map, D1/KV/DO patterns, storage write-through, WS protocol

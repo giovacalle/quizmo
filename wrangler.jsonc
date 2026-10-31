@@ -19,8 +19,11 @@
 		// For local dev, override APP_URL via `.dev.vars` (gitignored).
 		"TURNSTILE_SITE_KEY": "0x4AAAAAAC_05klBZOR7M7Ts",
 		"APP_URL": "https://quizmo.giova.dev",
-		"RESEND_FROM_EMAIL": "noreply@emails.giova.dev"
+		"EMAIL_FROM": "noreply@emails.giova.dev"
 	},
+	// Cloudflare Email Sending — OTP delivery. `emails.giova.dev` is onboarded in
+	// the dashboard (Email Service → Email Sending); the sender allowlist is a guard.
+	"send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["noreply@emails.giova.dev"] }],
 	"d1_databases": [
 		{
 			"binding": "QUIZMO_DB",
